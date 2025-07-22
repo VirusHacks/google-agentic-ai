@@ -2,9 +2,11 @@
 
 import type React from "react"
 
-import { useAuth } from "@/lib/auth-context"
-import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
+import { Card, CardContent } from "@/components/ui/card"
+import { Loader2 } from "lucide-react"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -23,14 +25,9 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
       }
 
       if (requiredRole && userProfile?.role !== requiredRole) {
-        // Redirect to appropriate dashboard based on actual role
-        if (userProfile?.role === "teacher") {
-          router.push("/teacher/dashboard")
-        } else if (userProfile?.role === "student") {
-          router.push("/student/dashboard")
-        } else {
-          router.push("/login")
-        }
+        // Redirect to appropriate dashboard based on user role
+        const redirectPath = userProfile?.role === "teacher" ? "/teacher/dashboard" : "/student/dashboard"
+        router.push(redirectPath)
         return
       }
     }
@@ -39,16 +36,38 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+            <p className="text-gray-600">Loading...</p>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
-  if (!user || (requiredRole && userProfile?.role !== requiredRole)) {
-    return null
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <p className="text-gray-600">Redirecting to login...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (requiredRole && userProfile?.role !== requiredRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <p className="text-gray-600">Redirecting...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return <>{children}</>

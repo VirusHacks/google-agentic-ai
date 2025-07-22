@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
@@ -16,8 +15,7 @@ import {
   deleteDoc,
   type Timestamp,
 } from "firebase/firestore"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { db, storage } from "@/lib/firebase"
+import { db } from "@/lib/firebase"
 import type { Classroom, Assignment, Content, StudentAnalytics } from "@/lib/types"
 import { SidebarLayout } from "@/components/layout/sidebar-layout"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -28,17 +26,17 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { FileUpload } from "@/components/ui/file-upload"
+import { StudentCard } from "@/components/ui/student-card"
+import { CloudinaryService } from "@/lib/cloudinary"
 import { useToast } from "@/hooks/use-toast"
 import {
   Users,
   BookOpen,
   FileText,
-  BarChart3,
   Plus,
-  Upload,
   Download,
   Trash2,
   Edit,
@@ -48,10 +46,11 @@ import {
   TrendingUp,
   Award,
   Target,
+  Video,
 } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 
-// --- helper to print a readable date from Firestore Timestamp OR native Date ---
+// Helper to format dates from Firestore Timestamp or native Date
 const formatDate = (d: Timestamp | Date): string => {
   const dateObj = (d as any)?.toDate ? (d as any).toDate() : (d as Date)
   return dateObj.toLocaleDateString()
@@ -69,6 +68,7 @@ export default function TeacherClassroomPage() {
   const [students, setStudents] = useState<any[]>([])
   const [analytics, setAnalytics] = useState<StudentAnalytics[]>([])
   const [loading, setLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
 
   // Form states
   const [newAssignment, setNewAssignment] = useState({
@@ -83,8 +83,7 @@ export default function TeacherClassroomPage() {
     type: "pdf" as "pdf" | "image" | "video" | "link",
     url: "",
   })
-  const [contentFile, setContentFile] = useState<File | null>(null)
-  const [assignmentFile, setAssignmentFile] = useState<File | null>(null)
+  const [assignmentFile, setAssignmentFile] = useState<{ url: string; filename: string } | null>(null)
 
   // Dialog states
   const [showAddAssignment, setShowAddAssignment] = useState(false)
@@ -146,20 +145,13 @@ export default function TeacherClassroomPage() {
     if (!userProfile || !classroom) return
 
     try {
-      let attachmentUrl = ""
-      if (assignmentFile) {
-        const fileRef = ref(storage, `assignments/${Date.now()}_${assignmentFile.name}`)
-        await uploadBytes(fileRef, assignmentFile)
-        attachmentUrl = await getDownloadURL(fileRef)
-      }
-
       await addDoc(collection(db, "assignments"), {
         classroomId: classroom.id,
         title: newAssignment.title,
         description: newAssignment.description,
         dueDate: new Date(newAssignment.dueDate),
         totalPoints: newAssignment.totalPoints,
-        attachments: attachmentUrl ? [attachmentUrl] : [],
+        attachments: assignmentFile ? [assignmentFile.url] : [],
         submissions: {},
         createdAt: new Date(),
       })
@@ -186,26 +178,17 @@ export default function TeacherClassroomPage() {
     if (!userProfile || !classroom) return
 
     try {
-      let contentUrl = newContent.url
-
-      if (contentFile) {
-        const fileRef = ref(storage, `content/${Date.now()}_${contentFile.name}`)
-        await uploadBytes(fileRef, contentFile)
-        contentUrl = await getDownloadURL(fileRef)
-      }
-
       await addDoc(collection(db, "content"), {
         classroomId: classroom.id,
         title: newContent.title,
         type: newContent.type,
         topic: newContent.topic,
-        url: contentUrl,
+        url: newContent.url,
         uploadedAt: new Date(),
         uploadedBy: userProfile.uid,
       })
 
       setNewContent({ title: "", topic: "", type: "pdf", url: "" })
-      setContentFile(null)
       setShowAddContent(false)
 
       toast({
@@ -219,6 +202,22 @@ export default function TeacherClassroomPage() {
         variant: "destructive",
       })
     }
+  }
+
+  const handleContentUpload = (url: string, filename: string) => {
+    setNewContent((prev) => ({ ...prev, url }))
+    toast({
+      title: "File Uploaded",
+      description: `${filename} uploaded successfully to Cloudinary`,
+    })
+  }
+
+  const handleAssignmentUpload = (url: string, filename: string) => {
+    setAssignmentFile({ url, filename })
+    toast({
+      title: "Attachment Uploaded",
+      description: `${filename} uploaded successfully to Cloudinary`,
+    })
   }
 
   const copyInviteCode = () => {
@@ -391,8 +390,45 @@ export default function TeacherClassroomPage() {
                     <Label className="text-sm font-medium">Created</Label>
                     <p className="text-sm text-gray-600 mt-1">{formatDate(classroom.createdAt)}</p>
                   </div>
+                  {classroom.curriculumUrl && (
+                    <div>
+                      <Label className="text-sm font-medium">Curriculum</Label>
+                      <Button size="sm" variant="outline" className="mt-1 bg-transparent" asChild>
+                        <a href={classroom.curriculumUrl} target="_blank" rel="noopener noreferrer">
+                          <Download className="h-3 w-3 mr-1" />
+                          View PDF
+                        </a>
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+
+              {/* Google Meet Section */}
+              {classroom.meetLink && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Video className="h-5 w-5 mr-2" />
+                      Google Meet
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Join the class meeting</p>
+                        <p className="text-xs text-gray-500">{classroom.meetLink}</p>
+                      </div>
+                      <Button asChild>
+                        <a href={classroom.meetLink} target="_blank" rel="noopener noreferrer">
+                          <Video className="h-4 w-4 mr-2" />
+                          Join Class
+                        </a>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               <Card>
                 <CardHeader>
@@ -421,42 +457,51 @@ export default function TeacherClassroomPage() {
                   </div>
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Calendar className="h-5 w-5 mr-2" />
-                    Quick Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <Button
-                    className="w-full justify-start bg-transparent"
-                    variant="outline"
-                    onClick={() => setShowAddAssignment(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Assignment
-                  </Button>
-                  <Button
-                    className="w-full justify-start bg-transparent"
-                    variant="outline"
-                    onClick={() => setShowAddContent(true)}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Content
-                  </Button>
-                  <Button
-                    className="w-full justify-start bg-transparent"
-                    variant="outline"
-                    onClick={() => setShowWorksheetGenerator(true)}
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generate Worksheet
-                  </Button>
-                </CardContent>
-              </Card>
             </div>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Calendar className="h-5 w-5 mr-2" />
+                  Quick Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <Button
+                  className="justify-start bg-transparent"
+                  variant="outline"
+                  onClick={() => setShowAddAssignment(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Assignment
+                </Button>
+                <Button
+                  className="justify-start bg-transparent"
+                  variant="outline"
+                  onClick={() => setShowAddContent(true)}
+                >
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Upload Content
+                </Button>
+                <Button
+                  className="justify-start bg-transparent"
+                  variant="outline"
+                  onClick={() => setShowWorksheetGenerator(true)}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  AI Worksheet
+                </Button>
+                <Button
+                  className="justify-start bg-transparent"
+                  variant="outline"
+                  onClick={() => setShowAIPlanning(true)}
+                >
+                  <Target className="h-4 w-4 mr-2" />
+                  Lesson Planner
+                </Button>
+              </CardContent>
+            </Card>
 
             {/* Recent Activity */}
             <Card>
@@ -514,50 +559,52 @@ export default function TeacherClassroomPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {classroomStudents.map((student) => (
-                <Card key={student.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <Avatar>
-                          <AvatarImage src="/placeholder.svg" />
-                          <AvatarFallback>{student.displayName?.charAt(0) || "S"}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-medium">{student.displayName}</h4>
-                          <p className="text-sm text-gray-500">{student.email}</p>
-                        </div>
-                      </div>
-                      <Button size="sm" variant="outline" onClick={() => removeStudent(student.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-4 text-center">
-                      <div>
-                        <p className="text-lg font-bold text-green-600">{Math.floor(Math.random() * 10) + 5}</p>
-                        <p className="text-xs text-gray-500">Completed</p>
-                      </div>
-                      <div>
-                        <p className="text-lg font-bold text-blue-600">{Math.floor(Math.random() * 20) + 70}%</p>
-                        <p className="text-xs text-gray-500">Avg Score</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              {classroomStudents.map((student) => {
+                // Generate mock student data
+                const studentData = {
+                  id: student.id,
+                  displayName: student.displayName,
+                  email: student.email,
+                  photoURL: student.photoURL,
+                  joinedAt: student.createdAt?.toDate?.() || new Date(student.createdAt),
+                  stats: {
+                    assignmentsCompleted: Math.floor(Math.random() * 15) + 5,
+                    assignmentsPending: Math.floor(Math.random() * 5),
+                    assignmentsOverdue: Math.floor(Math.random() * 3),
+                    averageScore: Math.floor(Math.random() * 30) + 70,
+                    lastActive: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
+                    streak: Math.floor(Math.random() * 10),
+                  },
+                  recentGrades: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, i) => ({
+                    assignmentTitle: `Assignment ${i + 1}`,
+                    score: Math.floor(Math.random() * 30) + 70,
+                    maxScore: 100,
+                    date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+                  })),
+                }
 
-              {classroomStudents.length === 0 && (
-                <div className="col-span-full text-center py-12">
-                  <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No students yet</h3>
-                  <p className="text-gray-500 mb-4">Share the invite code with your students</p>
-                  <Button onClick={copyInviteCode}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy Invite Code
-                  </Button>
-                </div>
-              )}
+                return (
+                  <StudentCard
+                    key={student.id}
+                    student={studentData}
+                    onRemove={removeStudent}
+                    showRemoveButton={true}
+                  />
+                )
+              })}
             </div>
+
+            {classroomStudents.length === 0 && (
+              <div className="text-center py-12">
+                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No students yet</h3>
+                <p className="text-gray-500 mb-4">Share the invite code with your students</p>
+                <Button onClick={copyInviteCode}>
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy Invite Code
+                </Button>
+              </div>
+            )}
           </TabsContent>
 
           {/* Content Tab */}
@@ -586,6 +633,16 @@ export default function TeacherClassroomPage() {
                           <h4 className="font-medium">{item.title}</h4>
                           <p className="text-sm text-gray-500">{item.topic}</p>
                           <p className="text-xs text-gray-400 mt-1">{formatDate(item.uploadedAt)}</p>
+                          {CloudinaryService.isImageFile(item.url) && (
+                            <img
+                              src={CloudinaryService.getOptimizedUrl(
+                                item.url,
+                                { width: 200, height: 150 || "/placeholder.svg" } || "/placeholder.svg",
+                              )}
+                              alt={item.title}
+                              className="mt-2 rounded border max-w-full h-auto"
+                            />
+                          )}
                         </div>
                       </div>
                       <div className="flex space-x-1">
@@ -605,12 +662,12 @@ export default function TeacherClassroomPage() {
 
               {content.length === 0 && (
                 <div className="col-span-full text-center py-12">
-                  <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No content yet</h3>
-                  <p className="text-gray-500 mb-4">Upload notes, PDFs, images, or video links</p>
+                  <p className="text-gray-500 mb-4">Upload learning materials for your students</p>
                   <Button onClick={() => setShowAddContent(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add First Resource
+                    Add First Content
                   </Button>
                 </div>
               )}
@@ -621,16 +678,10 @@ export default function TeacherClassroomPage() {
           <TabsContent value="assignments" className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">Assignments</h3>
-              <div className="flex space-x-2">
-                <Button variant="outline" onClick={() => setShowWorksheetGenerator(true)}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  AI Generator
-                </Button>
-                <Button onClick={() => setShowAddAssignment(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Assignment
-                </Button>
-              </div>
+              <Button onClick={() => setShowAddAssignment(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Assignment
+              </Button>
             </div>
 
             <div className="space-y-4">
@@ -639,22 +690,31 @@ export default function TeacherClassroomPage() {
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <h4 className="font-semibold text-lg">{assignment.title}</h4>
-                        <p className="text-gray-600 mt-1">{assignment.description}</p>
-                        <div className="flex items-center space-x-4 mt-3 text-sm text-gray-500">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <h4 className="font-medium text-lg">{assignment.title}</h4>
+                          <Badge variant="outline">{assignment.totalPoints} points</Badge>
+                        </div>
+                        <p className="text-gray-600 mb-3">{assignment.description}</p>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500">
                           <span className="flex items-center">
                             <Calendar className="h-4 w-4 mr-1" />
                             Due: {formatDate(assignment.dueDate)}
-                          </span>
-                          <span className="flex items-center">
-                            <Award className="h-4 w-4 mr-1" />
-                            {assignment.totalPoints} points
                           </span>
                           <span className="flex items-center">
                             <Users className="h-4 w-4 mr-1" />
                             {Object.keys(assignment.submissions || {}).length} submissions
                           </span>
                         </div>
+                        {assignment.attachments && assignment.attachments.length > 0 && (
+                          <div className="mt-2">
+                            <Button size="sm" variant="outline" asChild>
+                              <a href={assignment.attachments[0]} target="_blank" rel="noopener noreferrer">
+                                <Download className="h-3 w-3 mr-1" />
+                                View Attachment
+                              </a>
+                            </Button>
+                          </div>
+                        )}
                       </div>
                       <div className="flex space-x-2">
                         <Button size="sm" variant="outline">
@@ -662,59 +722,11 @@ export default function TeacherClassroomPage() {
                           Edit
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => deleteAssignment(assignment.id)}>
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
                         </Button>
                       </div>
                     </div>
-
-                    {assignment.attachments && assignment.attachments.length > 0 && (
-                      <div className="mt-4">
-                        <Label className="text-sm font-medium">Attachments:</Label>
-                        <div className="flex space-x-2 mt-1">
-                          {assignment.attachments.map((url, index) => (
-                            <Button key={index} size="sm" variant="outline" asChild>
-                              <a href={url} target="_blank" rel="noopener noreferrer">
-                                <Download className="h-3 w-3 mr-1" />
-                                File {index + 1}
-                              </a>
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {Object.keys(assignment.submissions || {}).length > 0 && (
-                      <div className="mt-4 pt-4 border-t">
-                        <Label className="text-sm font-medium">Recent Submissions:</Label>
-                        <div className="mt-2 space-y-2">
-                          {Object.values(assignment.submissions || {})
-                            .slice(0, 3)
-                            .map((submission, index) => (
-                              <div key={index} className="flex items-center justify-between text-sm">
-                                <span>{submission.studentName}</span>
-                                <div className="flex items-center space-x-2">
-                                  <Badge
-                                    variant={
-                                      submission.status === "graded"
-                                        ? "default"
-                                        : submission.status === "submitted"
-                                          ? "secondary"
-                                          : "destructive"
-                                    }
-                                  >
-                                    {submission.status}
-                                  </Badge>
-                                  {submission.grade && (
-                                    <span className="font-medium">
-                                      {submission.grade}/{assignment.totalPoints}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -723,10 +735,10 @@ export default function TeacherClassroomPage() {
                 <div className="text-center py-12">
                   <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments yet</h3>
-                  <p className="text-gray-500 mb-4">Create your first assignment to get started</p>
+                  <p className="text-gray-500 mb-4">Create assignments to track student progress</p>
                   <Button onClick={() => setShowAddAssignment(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Assignment
+                    Create First Assignment
                   </Button>
                 </div>
               )}
@@ -736,7 +748,6 @@ export default function TeacherClassroomPage() {
           {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Performance by Topic */}
               <Card>
                 <CardHeader>
                   <CardTitle>Performance by Topic</CardTitle>
@@ -755,7 +766,6 @@ export default function TeacherClassroomPage() {
                 </CardContent>
               </Card>
 
-              {/* Grade Distribution */}
               <Card>
                 <CardHeader>
                   <CardTitle>Grade Distribution</CardTitle>
@@ -768,10 +778,11 @@ export default function TeacherClassroomPage() {
                         data={gradeDistribution}
                         cx="50%"
                         cy="50%"
+                        labelLine={false}
+                        label={({ grade, count }) => `${grade}: ${count}`}
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="count"
-                        label={({ grade, count }) => `${grade}: ${count}`}
                       >
                         {gradeDistribution.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
@@ -782,64 +793,52 @@ export default function TeacherClassroomPage() {
                   </ResponsiveContainer>
                 </CardContent>
               </Card>
+            </div>
 
-              {/* Class Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Class Statistics</CardTitle>
-                  <CardDescription>Key metrics for your classroom</CardDescription>
+                  <CardTitle className="flex items-center">
+                    <TrendingUp className="h-5 w-5 mr-2" />
+                    Class Average
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">{Math.floor(Math.random() * 20) + 75}%</p>
-                      <p className="text-sm text-gray-500">Class Average</p>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">{Math.floor(Math.random() * 10) + 85}%</p>
-                      <p className="text-sm text-gray-500">Completion Rate</p>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-purple-600">{Math.floor(Math.random() * 5) + 3}</p>
-                      <p className="text-sm text-gray-500">Avg Time (hrs)</p>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-orange-600">{Math.floor(Math.random() * 3) + 1}</p>
-                      <p className="text-sm text-gray-500">Late Submissions</p>
-                    </div>
+                  <div className="text-3xl font-bold text-blue-600">
+                    {Math.round(performanceData.reduce((sum, item) => sum + item.average, 0) / performanceData.length)}%
                   </div>
+                  <p className="text-sm text-gray-500">Overall performance</p>
                 </CardContent>
               </Card>
 
-              {/* Top Performers */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Top Performers</CardTitle>
-                  <CardDescription>Students with highest scores</CardDescription>
+                  <CardTitle className="flex items-center">
+                    <Award className="h-5 w-5 mr-2" />
+                    Top Performers
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {classroomStudents.slice(0, 5).map((student, index) => (
-                      <div key={student.id} className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-sm font-medium text-blue-600">{index + 1}</span>
-                          </div>
-                          <div>
-                            <p className="font-medium">{student.displayName}</p>
-                            <p className="text-sm text-gray-500">{student.email}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">{Math.floor(Math.random() * 20) + 80}%</p>
-                          <p className="text-xs text-gray-500">Average</p>
-                        </div>
-                      </div>
-                    ))}
-                    {classroomStudents.length === 0 && (
-                      <p className="text-center text-gray-500 py-4">No students enrolled yet</p>
-                    )}
+                  <div className="text-3xl font-bold text-green-600">
+                    {gradeDistribution.find((g) => g.grade === "A")?.count || 0}
                   </div>
+                  <p className="text-sm text-gray-500">Students with A grades</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Target className="h-5 w-5 mr-2" />
+                    Needs Support
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-red-600">
+                    {(gradeDistribution.find((g) => g.grade === "D")?.count || 0) +
+                      (gradeDistribution.find((g) => g.grade === "F")?.count || 0)}
+                  </div>
+                  <p className="text-sm text-gray-500">Students needing help</p>
                 </CardContent>
               </Card>
             </div>
@@ -848,58 +847,63 @@ export default function TeacherClassroomPage() {
 
         {/* Add Assignment Dialog */}
         <Dialog open={showAddAssignment} onOpenChange={setShowAddAssignment}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create New Assignment</DialogTitle>
               <DialogDescription>Add a new assignment for your students</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddAssignment} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  value={newAssignment.title}
-                  onChange={(e) => setNewAssignment((prev) => ({ ...prev, title: e.target.value }))}
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Assignment Title</Label>
+                  <Input
+                    id="title"
+                    value={newAssignment.title}
+                    onChange={(e) => setNewAssignment({ ...newAssignment, title: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="points">Total Points</Label>
+                  <Input
+                    id="points"
+                    type="number"
+                    value={newAssignment.totalPoints}
+                    onChange={(e) =>
+                      setNewAssignment({ ...newAssignment, totalPoints: Number.parseInt(e.target.value) })
+                    }
+                    required
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
                   value={newAssignment.description}
-                  onChange={(e) => setNewAssignment((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) => setNewAssignment({ ...newAssignment, description: e.target.value })}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date *</Label>
+                <Label htmlFor="dueDate">Due Date</Label>
                 <Input
                   id="dueDate"
                   type="datetime-local"
                   value={newAssignment.dueDate}
-                  onChange={(e) => setNewAssignment((prev) => ({ ...prev, dueDate: e.target.value }))}
+                  onChange={(e) => setNewAssignment({ ...newAssignment, dueDate: e.target.value })}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="totalPoints">Total Points</Label>
-                <Input
-                  id="totalPoints"
-                  type="number"
-                  value={newAssignment.totalPoints}
-                  onChange={(e) =>
-                    setNewAssignment((prev) => ({ ...prev, totalPoints: Number.parseInt(e.target.value) }))
-                  }
-                  min="1"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="assignmentFile">Attachment (optional)</Label>
-                <Input
-                  id="assignmentFile"
-                  type="file"
-                  onChange={(e) => setAssignmentFile(e.target.files?.[0] || null)}
+                <Label>Attachment (Optional)</Label>
+                <FileUpload
+                  onUploadComplete={(url, filename, publicId) => {
+                    setAssignmentFile({ url, filename })
+                  }}
+                  acceptedTypes={["application/pdf", ".doc", ".docx", ".txt"]}
+                  maxSizeMB={10}
+                  disabled={isLoading}
                 />
               </div>
               <div className="flex justify-end space-x-2">
@@ -914,36 +918,38 @@ export default function TeacherClassroomPage() {
 
         {/* Add Content Dialog */}
         <Dialog open={showAddContent} onOpenChange={setShowAddContent}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Add Learning Content</DialogTitle>
-              <DialogDescription>Upload notes, PDFs, images, or add video links</DialogDescription>
+              <DialogDescription>Upload or link to learning materials</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddContent} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="contentTitle">Title *</Label>
-                <Input
-                  id="contentTitle"
-                  value={newContent.title}
-                  onChange={(e) => setNewContent((prev) => ({ ...prev, title: e.target.value }))}
-                  required
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="contentTitle">Title</Label>
+                  <Input
+                    id="contentTitle"
+                    value={newContent.title}
+                    onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="topic">Topic</Label>
+                  <Input
+                    id="topic"
+                    value={newContent.topic}
+                    onChange={(e) => setNewContent({ ...newContent, topic: e.target.value })}
+                    required
+                  />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="topic">Topic</Label>
-                <Input
-                  id="topic"
-                  value={newContent.topic}
-                  onChange={(e) => setNewContent((prev) => ({ ...prev, topic: e.target.value }))}
-                  placeholder="e.g., Algebra, Geometry"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contentType">Type</Label>
+                <Label htmlFor="contentType">Content Type</Label>
                 <Select
                   value={newContent.type}
                   onValueChange={(value: "pdf" | "image" | "video" | "link") =>
-                    setNewContent((prev) => ({ ...prev, type: value }))
+                    setNewContent({ ...newContent, type: value })
                   }
                 >
                   <SelectTrigger>
@@ -952,42 +958,37 @@ export default function TeacherClassroomPage() {
                   <SelectContent>
                     <SelectItem value="pdf">PDF Document</SelectItem>
                     <SelectItem value="image">Image</SelectItem>
-                    <SelectItem value="video">Video Link</SelectItem>
-                    <SelectItem value="link">Web Link</SelectItem>
+                    <SelectItem value="video">Video</SelectItem>
+                    <SelectItem value="link">External Link</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              {newContent.type === "video" || newContent.type === "link" ? (
+              {newContent.type !== "link" && (
                 <div className="space-y-2">
-                  <Label htmlFor="contentUrl">URL *</Label>
-                  <Input
-                    id="contentUrl"
-                    type="url"
-                    value={newContent.url}
-                    onChange={(e) => setNewContent((prev) => ({ ...prev, url: e.target.value }))}
-                    placeholder="https://..."
-                    required
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="contentFile">File *</Label>
-                  <Input
-                    id="contentFile"
-                    type="file"
-                    accept={newContent.type === "pdf" ? ".pdf" : "image/*"}
-                    onChange={(e) => setContentFile(e.target.files?.[0] || null)}
-                    required
+                  <Label>Upload File</Label>
+                  <FileUpload
+                    onUploadComplete={(url, filename, publicId) => {
+                      setNewContent((prev) => ({ ...prev, url }))
+                    }}
+                    acceptedTypes={
+                      newContent.type === "pdf"
+                        ? ["application/pdf"]
+                        : newContent.type === "image"
+                          ? ["image/*"]
+                          : ["video/*"]
+                    }
+                    maxSizeMB={50}
+                    disabled={isLoading}
                   />
                 </div>
               )}
-
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={() => setShowAddContent(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Add Content</Button>
+                <Button type="submit" disabled={!newContent.url && newContent.type !== "link"}>
+                  Add Content
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -997,89 +998,39 @@ export default function TeacherClassroomPage() {
         <Dialog open={showAIPlanning} onOpenChange={setShowAIPlanning}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>AI Planning Agent</DialogTitle>
-              <DialogDescription>
-                Get AI-powered suggestions for curriculum planning and lesson organization
-              </DialogDescription>
+              <DialogTitle>AI Lesson Planner</DialogTitle>
+              <DialogDescription>Generate lesson plans and teaching strategies with AI</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-blue-900 mb-2">Curriculum Analysis</h4>
-                <p className="text-sm text-blue-800">
-                  Based on your {classroom.subject} curriculum, I recommend focusing on the following areas:
+              <div className="text-center py-8">
+                <Target className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">AI Lesson Planning</h3>
+                <p className="text-gray-500 mb-4">
+                  This feature will help you create comprehensive lesson plans, suggest teaching strategies, and
+                  generate curriculum content.
                 </p>
-                <ul className="list-disc list-inside text-sm text-blue-800 mt-2 space-y-1">
-                  <li>Strengthen foundational concepts with interactive exercises</li>
-                  <li>Introduce advanced topics gradually with practical examples</li>
-                  <li>Schedule regular assessments to track progress</li>
-                  <li>Incorporate multimedia resources for visual learners</li>
-                </ul>
-              </div>
-
-              <div className="p-4 bg-green-50 rounded-lg">
-                <h4 className="font-medium text-green-900 mb-2">Suggested Next Steps</h4>
-                <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start bg-transparent">
-                    <FileText className="h-4 w-4 mr-2" />
-                    Generate practice worksheets for current topic
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start bg-transparent">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    Create weekly lesson plan template
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start bg-transparent">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Analyze student performance patterns
-                  </Button>
-                </div>
+                <Badge variant="secondary">Coming Soon</Badge>
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* Worksheet Generator Dialog */}
+        {/* AI Worksheet Generator Dialog */}
         <Dialog open={showWorksheetGenerator} onOpenChange={setShowWorksheetGenerator}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>AI Worksheet Generator</DialogTitle>
-              <DialogDescription>Generate custom worksheets using AI</DialogDescription>
+              <DialogDescription>Create custom worksheets and practice problems</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Topic</Label>
-                <Input placeholder="e.g., Linear Equations" />
-              </div>
-              <div className="space-y-2">
-                <Label>Difficulty Level</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select difficulty" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="beginner">Beginner</SelectItem>
-                    <SelectItem value="intermediate">Intermediate</SelectItem>
-                    <SelectItem value="advanced">Advanced</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Number of Questions</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select quantity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10 Questions</SelectItem>
-                    <SelectItem value="15">15 Questions</SelectItem>
-                    <SelectItem value="20">20 Questions</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setShowWorksheetGenerator(false)}>
-                  Cancel
-                </Button>
-                <Button>Generate Worksheet</Button>
+              <div className="text-center py-8">
+                <FileText className="h-12 w-12 text-green-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium mb-2">AI Worksheet Generator</h3>
+                <p className="text-gray-500 mb-4">
+                  Generate custom worksheets, practice problems, and assessments tailored to your curriculum and student
+                  level.
+                </p>
+                <Badge variant="secondary">Coming Soon</Badge>
               </div>
             </div>
           </DialogContent>

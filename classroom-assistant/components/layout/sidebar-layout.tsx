@@ -2,21 +2,13 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { collection, query, where, onSnapshot } from "firebase/firestore"
-import { db } from "@/lib/firebase"
-import type { Classroom } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
-import { BookOpen, Settings, LogOut, Plus, Home, MessageCircle, Bell } from "lucide-react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { AIAssistant } from "@/components/ai-assistant"
+import { BookOpen, BarChart3, Settings, Menu, X, Home, Plus, MessageCircle, Calendar, User, Bot } from "lucide-react"
 
 interface SidebarLayoutProps {
   children: React.ReactNode
@@ -24,182 +16,127 @@ interface SidebarLayoutProps {
 }
 
 export function SidebarLayout({ children, role }: SidebarLayoutProps) {
-  const { userProfile, logout } = useAuth()
-  const [classrooms, setClassrooms] = useState<Classroom[]>([])
-  const [showAI, setShowAI] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
+  const { userProfile } = useAuth()
 
-  useEffect(() => {
-    if (!userProfile) return
+  const teacherNavItems = [
+    { name: "Dashboard", href: "/teacher/dashboard", icon: Home },
+    { name: "Create Classroom", href: "/teacher/create-classroom", icon: Plus },
+    { name: "Analytics", href: "/teacher/analytics", icon: BarChart3 },
+    { name: "AI Tools", href: "/agents/lecture-summarizer", icon: Bot },
+  ]
 
-    const q =
-      role === "teacher"
-        ? query(collection(db, "classrooms"), where("teacherId", "==", userProfile.uid))
-        : query(collection(db, "classrooms"), where("students", "array-contains", userProfile.uid))
+  const studentNavItems = [
+    { name: "Dashboard", href: "/student/dashboard", icon: Home },
+    { name: "My Classes", href: "/student/classes", icon: BookOpen },
+    { name: "Calendar", href: "/student/calendar", icon: Calendar },
+    { name: "AI Tutor", href: "/agents/ai-tutor", icon: MessageCircle },
+  ]
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const classroomData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Classroom[]
-      setClassrooms(classroomData)
-    })
+  const navItems = role === "teacher" ? teacherNavItems : studentNavItems
 
-    return () => unsubscribe()
-  }, [userProfile, role])
-
-  const isActive = (path: string) => pathname.startsWith(path)
+  const isActive = (href: string) => {
+    return pathname === href || pathname.startsWith(href + "/")
+  }
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <BookOpen className="h-8 w-8 text-blue-600" />
-            <div>
-              <h1 className="font-semibold text-gray-900">Classroom</h1>
-              <p className="text-sm text-gray-500 capitalize">{role}</p>
+      <div
+        className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
+      `}
+      >
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center space-x-2">
+              <BookOpen className="h-8 w-8 text-blue-600" />
+              <span className="text-xl font-bold text-gray-900">Classroom</span>
+            </div>
+            <Button variant="ghost" size="sm" className="lg:hidden" onClick={() => setSidebarOpen(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* User Profile */}
+          <div className="p-4 border-b">
+            <div className="flex items-center space-x-3">
+              <Avatar>
+                <AvatarImage src={(userProfile as any)?.photoURL || "/placeholder.svg"} />
+                <AvatarFallback>{userProfile?.displayName?.charAt(0)?.toUpperCase() || "U"}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{userProfile?.displayName || "User"}</p>
+                <p className="text-xs text-gray-500 capitalize">{role}</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Navigation */}
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="p-4 space-y-2">
-              <Link href={`/${role}/dashboard`}>
-                <Button
-                  variant={isActive(`/${role}/dashboard`) ? "secondary" : "ghost"}
-                  className="w-full justify-start"
-                >
-                  <Home className="h-4 w-4 mr-2" />
-                  Dashboard
-                </Button>
-              </Link>
-
-              {role === "teacher" && (
-                <Link href="/teacher/create-classroom">
+          {/* Navigation */}
+          <nav className="flex-1 p-4 space-y-2">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <Link key={item.name} href={item.href}>
                   <Button
-                    variant={isActive("/teacher/create-classroom") ? "secondary" : "ghost"}
+                    variant={isActive(item.href) ? "default" : "ghost"}
                     className="w-full justify-start"
+                    onClick={() => setSidebarOpen(false)}
                   >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Classroom
+                    <Icon className="h-4 w-4 mr-3" />
+                    {item.name}
                   </Button>
                 </Link>
-              )}
-            </div>
+              )
+            })}
+          </nav>
 
-            <Separator className="mx-4" />
-
-            {/* Classrooms */}
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-700">Classrooms</h3>
-                {role === "teacher" && (
-                  <Link href="/teacher/create-classroom">
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </Link>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                {classrooms.map((classroom) => (
-                  <Link key={classroom.id} href={`/${role}/classroom/${classroom.id}`}>
-                    <Button
-                      variant={isActive(`/${role}/classroom/${classroom.id}`) ? "secondary" : "ghost"}
-                      className="w-full justify-start text-left h-auto p-2"
-                    >
-                      <div className="flex items-center space-x-2 w-full">
-                        <div className="h-8 w-8 rounded bg-blue-100 flex items-center justify-center flex-shrink-0">
-                          <BookOpen className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{classroom.name}</p>
-                          <p className="text-xs text-gray-500 truncate">{classroom.subject}</p>
-                        </div>
-                        {role === "teacher" && (
-                          <Badge variant="secondary" className="text-xs">
-                            {classroom.students.length}
-                          </Badge>
-                        )}
-                      </div>
-                    </Button>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </ScrollArea>
-        </div>
-
-        {/* User Menu */}
-        <div className="p-4 border-t border-gray-200">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="w-full justify-start p-2">
-                <Avatar className="h-8 w-8 mr-2">
-                  <AvatarImage src="/placeholder.svg" />
-                  <AvatarFallback>{userProfile?.displayName?.charAt(0) || "U"}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium">{userProfile?.displayName}</p>
-                  <p className="text-xs text-gray-500">{userProfile?.email}</p>
-                </div>
+          {/* Footer */}
+          <div className="p-4 border-t space-y-2">
+            <Link href="/profile">
+              <Button variant="ghost" className="w-full justify-start">
+                <User className="h-4 w-4 mr-3" />
+                Profile
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem>
-                <Settings className="h-4 w-4 mr-2" />
+            </Link>
+            <Link href="/settings">
+              <Button variant="ghost" className="w-full justify-start">
+                <Settings className="h-4 w-4 mr-3" />
                 Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={logout}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col lg:ml-0">
+        {/* Mobile header */}
+        <div className="lg:hidden bg-white shadow-sm border-b px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {pathname.includes("/dashboard")
-                  ? "Dashboard"
-                  : pathname.includes("/create-classroom")
-                    ? "Create Classroom"
-                    : pathname.includes("/classroom/")
-                      ? "Classroom"
-                      : "Classroom Assistant"}
-              </h2>
-            </div>
-
+            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(true)}>
+              <Menu className="h-5 w-5" />
+            </Button>
             <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm" onClick={() => setShowAI(true)}>
-                <MessageCircle className="h-4 w-4 mr-2" />
-                AI Assistant
-              </Button>
-              <Button variant="ghost" size="sm">
-                <Bell className="h-4 w-4" />
-              </Button>
+              <BookOpen className="h-6 w-6 text-blue-600" />
+              <span className="font-semibold text-gray-900">Classroom</span>
             </div>
+            <div className="w-8" /> {/* Spacer for centering */}
           </div>
         </div>
 
-        {/* Page Content */}
-        <div className="flex-1 overflow-auto">{children}</div>
+        {/* Page content */}
+        <main className="flex-1 overflow-auto">{children}</main>
       </div>
-
-      {/* AI Assistant */}
-      <AIAssistant open={showAI} onOpenChange={setShowAI} context={pathname} role={role} />
     </div>
   )
 }

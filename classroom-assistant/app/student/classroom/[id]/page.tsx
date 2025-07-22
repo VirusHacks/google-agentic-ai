@@ -1,26 +1,36 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { doc, onSnapshot, collection, query, where, updateDoc } from "firebase/firestore"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { db, storage } from "@/lib/firebase"
+import { doc, onSnapshot, collection, query, where, updateDoc, type Timestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 import type { Classroom, Assignment, Content } from "@/lib/types"
 import { SidebarLayout } from "@/components/layout/sidebar-layout"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { FileUpload } from "@/components/ui/file-upload"
+import { CloudinaryService } from "@/lib/cloudinary"
 import { useToast } from "@/hooks/use-toast"
-import { BookOpen, FileText, MessageCircle, Download, Calendar, Clock, Award } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts"
+import { BookOpen, FileText, Calendar, Clock, CheckCircle, Download, Video, TrendingUp, Award } from "lucide-react"
+
+// Helper to format dates from Firestore Timestamp or native Date
+const formatDate = (d: Timestamp | Date): string => {
+  const dateObj = (d as any)?.toDate ? (d as any).toDate() : (d as Date)
+  return dateObj.toLocaleDateString()
+}
+
+const formatDateTime = (d: Timestamp | Date): string => {
+  const dateObj = (d as any)?.toDate ? (d as any).toDate() : (d as Date)
+  return dateObj.toLocaleString()
+}
 
 export default function StudentClassroomPage() {
   const params = useParams()
@@ -34,15 +44,10 @@ export default function StudentClassroomPage() {
   const [loading, setLoading] = useState(true)
 
   // Submission states
-  const [submissionText, setSubmissionText] = useState("")
-  const [submissionFile, setSubmissionFile] = useState<File | null>(null)
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
-  const [showSubmissionDialog, setShowSubmissionDialog] = useState(false)
-
-  // AI Chat states
-  const [showAIChat, setShowAIChat] = useState(false)
-  const [chatMessages, setChatMessages] = useState<Array<{ id: string; content: string; sender: "user" | "ai" }>>([])
-  const [chatInput, setChatInput] = useState("")
+  const [submissionText, setSubmissionText] = useState("")
+  const [submissionFile, setSubmissionFile] = useState<{ url: string; filename: string } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!classroomId) return
@@ -86,31 +91,24 @@ export default function StudentClassroomPage() {
     e.preventDefault()
     if (!userProfile || !selectedAssignment) return
 
-    try {
-      let attachmentUrl = ""
-      if (submissionFile) {
-        const fileRef = ref(storage, `submissions/${Date.now()}_${submissionFile.name}`)
-        await uploadBytes(fileRef, submissionFile)
-        attachmentUrl = await getDownloadURL(fileRef)
-      }
+    setSubmitting(true)
 
-      const submission = {
+    try {
+      const submissionData = {
         studentId: userProfile.uid,
-        studentName: userProfile.displayName,
         submittedAt: new Date(),
-        attachments: attachmentUrl ? [attachmentUrl] : [],
-        text: submissionText,
         status: "submitted" as const,
+        content: submissionText,
+        attachments: submissionFile ? [submissionFile.url] : [],
       }
 
       await updateDoc(doc(db, "assignments", selectedAssignment.id), {
-        [`submissions.${userProfile.uid}`]: submission,
+        [`submissions.${userProfile.uid}`]: submissionData,
       })
 
       setSubmissionText("")
       setSubmissionFile(null)
       setSelectedAssignment(null)
-      setShowSubmissionDialog(false)
 
       toast({
         title: "Assignment Submitted",
@@ -122,50 +120,17 @@ export default function StudentClassroomPage() {
         description: error.message,
         variant: "destructive",
       })
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  const handleAIChat = async () => {
-    if (!chatInput.trim()) return
-
-    const userMessage = {
-      id: Date.now().toString(),
-      content: chatInput,
-      sender: "user" as const,
-    }
-
-    setChatMessages((prev) => [...prev, userMessage])
-    setChatInput("")
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        id: (Date.now() + 1).toString(),
-        content: getAIResponse(chatInput, classroom?.subject || ""),
-        sender: "ai" as const,
-      }
-      setChatMessages((prev) => [...prev, aiResponse])
-    }, 1000)
-  }
-
-  const getAIResponse = (query: string, subject: string) => {
-    const responses = [
-      `Based on the ${subject} curriculum, here's what I can help you with: ${query}`,
-      `Let me explain this ${subject} concept in simpler terms...`,
-      `For this ${subject} topic, I recommend reviewing the uploaded materials first.`,
-      `This is a common question in ${subject}. Here's a step-by-step approach...`,
-    ]
-    return responses[Math.floor(Math.random() * responses.length)]
-  }
-
-  // Generate mock performance data
-  const generatePerformanceData = () => {
-    const topics = ["Topic 1", "Topic 2", "Topic 3", "Topic 4", "Topic 5"]
-    return topics.map((topic) => ({
-      topic,
-      score: Math.floor(Math.random() * 40) + 60,
-      average: Math.floor(Math.random() * 30) + 70,
-    }))
+  const handleSubmissionUpload = (url: string, filename: string) => {
+    setSubmissionFile({ url, filename })
+    toast({
+      title: "File Uploaded",
+      description: `${filename} uploaded successfully to Cloudinary`,
+    })
   }
 
   if (loading) {
@@ -192,12 +157,19 @@ export default function StudentClassroomPage() {
     )
   }
 
-  const userAssignments = assignments.map((assignment) => ({
-    ...assignment,
-    userSubmission: assignment.submissions?.[userProfile?.uid || ""],
-  }))
+  // Calculate student progress
+  const userSubmissions = assignments.filter((a) => a.submissions?.[userProfile?.uid || ""])
+  const completedAssignments = userSubmissions.filter((a) => a.submissions[userProfile?.uid || ""].status === "graded")
+  const pendingAssignments = assignments.filter((a) => !a.submissions?.[userProfile?.uid || ""])
+  const overdueAssignments = pendingAssignments.filter((a) => {
+    const dueDate = a.dueDate?.toDate?.() || new Date(a.dueDate)
+    return dueDate < new Date()
+  })
 
-  const performanceData = generatePerformanceData()
+  const grades = completedAssignments
+    .map((a) => a.submissions[userProfile?.uid || ""].grade)
+    .filter((grade) => grade !== undefined) as number[]
+  const averageGrade = grades.length > 0 ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length : 0
 
   return (
     <SidebarLayout role="student">
@@ -211,61 +183,161 @@ export default function StudentClassroomPage() {
                 {classroom.subject} • {classroom.teacherName}
               </p>
             </div>
-            <Button onClick={() => setShowAIChat(true)}>
-              <MessageCircle className="h-4 w-4 mr-2" />
-              Ask Doubt
-            </Button>
+            <div className="flex items-center space-x-2">
+              {classroom.meetLink && (
+                <Button asChild>
+                  <a href={classroom.meetLink} target="_blank" rel="noopener noreferrer">
+                    <Video className="h-4 w-4 mr-2" />
+                    Join Class
+                  </a>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 
-        <Tabs defaultValue="content" className="space-y-6">
+        <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="content">Content</TabsTrigger>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="assignments">Assignments</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="doubt">Ask Doubt</TabsTrigger>
+            <TabsTrigger value="content">Resources</TabsTrigger>
+            <TabsTrigger value="grades">Grades</TabsTrigger>
           </TabsList>
 
-          {/* Content Tab */}
-          <TabsContent value="content" className="space-y-6">
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Assignments</CardTitle>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{assignments.length}</div>
+                  <p className="text-xs text-muted-foreground">In this class</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Completed</CardTitle>
+                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">{completedAssignments.length}</div>
+                  <p className="text-xs text-muted-foreground">Assignments done</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pending</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">{pendingAssignments.length}</div>
+                  <p className="text-xs text-muted-foreground">To complete</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{averageGrade > 0 ? Math.round(averageGrade) : "--"}%</div>
+                  <p className="text-xs text-muted-foreground">Overall performance</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Progress Overview */}
             <Card>
               <CardHeader>
-                <CardTitle>Learning Resources</CardTitle>
-                <CardDescription>Materials shared by your teacher</CardDescription>
+                <CardTitle>Your Progress</CardTitle>
+                <CardDescription>Track your completion and performance</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium">Assignment Completion</span>
+                    <span className="text-sm text-gray-600">
+                      {assignments.length > 0
+                        ? Math.round((completedAssignments.length / assignments.length) * 100)
+                        : 0}
+                      %
+                    </span>
+                  </div>
+                  <Progress
+                    value={assignments.length > 0 ? (completedAssignments.length / assignments.length) * 100 : 0}
+                  />
+                </div>
+
+                {overdueAssignments.length > 0 && (
+                  <div className="p-4 bg-red-50 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-5 w-5 text-red-600" />
+                      <span className="font-medium text-red-800">
+                        {overdueAssignments.length} overdue assignment{overdueAssignments.length > 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <p className="text-sm text-red-600 mt-1">Please complete these assignments as soon as possible.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Upcoming Assignments */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Upcoming Assignments</CardTitle>
+                <CardDescription>Assignments due soon</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {content.length === 0 ? (
-                    <div className="col-span-full text-center py-12">
-                      <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500">No content available yet</p>
-                    </div>
-                  ) : (
-                    content.map((item) => (
-                      <Card key={item.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start space-x-3">
-                            <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                              {item.type === "pdf" && <FileText className="h-5 w-5 text-blue-600" />}
-                              {item.type === "image" && <BookOpen className="h-5 w-5 text-blue-600" />}
-                              {item.type === "video" && <Clock className="h-5 w-5 text-blue-600" />}
-                              {item.type === "link" && <BookOpen className="h-5 w-5 text-blue-600" />}
+                <div className="space-y-4">
+                  {pendingAssignments
+                    .sort((a, b) => {
+                      const dateA = a.dueDate?.toDate?.() || new Date(a.dueDate)
+                      const dateB = b.dueDate?.toDate?.() || new Date(b.dueDate)
+                      return dateA.getTime() - dateB.getTime()
+                    })
+                    .slice(0, 5)
+                    .map((assignment) => {
+                      const dueDate = assignment.dueDate?.toDate?.() || new Date(assignment.dueDate)
+                      const isOverdue = dueDate < new Date()
+
+                      return (
+                        <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div
+                              className={`h-10 w-10 rounded-lg flex items-center justify-center ${
+                                isOverdue ? "bg-red-100" : "bg-blue-100"
+                              }`}
+                            >
+                              <FileText className={`h-5 w-5 ${isOverdue ? "text-red-600" : "text-blue-600"}`} />
                             </div>
-                            <div className="flex-1">
-                              <h4 className="font-medium">{item.title}</h4>
-                              <p className="text-sm text-gray-500">{item.topic}</p>
-                              <p className="text-xs text-gray-400 mt-1">{item.uploadedAt.toLocaleDateString()}</p>
-                              <Button size="sm" variant="outline" className="mt-2 bg-transparent" asChild>
-                                <a href={item.url} target="_blank" rel="noopener noreferrer">
-                                  <Download className="h-3 w-3 mr-1" />
-                                  View
-                                </a>
-                              </Button>
+                            <div>
+                              <h3 className="font-medium">{assignment.title}</h3>
+                              <p className="text-sm text-gray-500">Due: {formatDateTime(assignment.dueDate)}</p>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))
+                          <div className="flex items-center space-x-2">
+                            {isOverdue && <Badge variant="destructive">Overdue</Badge>}
+                            <Badge variant="outline">{assignment.totalPoints} pts</Badge>
+                            <Button size="sm" onClick={() => setSelectedAssignment(assignment)}>
+                              Submit
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+
+                  {pendingAssignments.length === 0 && (
+                    <div className="text-center py-8">
+                      <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
+                      <p className="text-gray-500">All assignments completed! Great work!</p>
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -275,323 +347,232 @@ export default function StudentClassroomPage() {
           {/* Assignments Tab */}
           <TabsContent value="assignments" className="space-y-6">
             <div className="space-y-4">
-              {userAssignments.length === 0 ? (
-                <Card>
-                  <CardContent className="text-center py-12">
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No assignments yet</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                userAssignments.map((assignment) => (
+              {assignments.map((assignment) => {
+                const userSubmission = assignment.submissions?.[userProfile?.uid || ""]
+                const dueDate = assignment.dueDate?.toDate?.() || new Date(assignment.dueDate)
+                const isOverdue = dueDate < new Date() && !userSubmission
+
+                return (
                   <Card key={assignment.id}>
                     <CardContent className="p-6">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2 mb-2">
-                            <h4 className="font-semibold text-lg">{assignment.title}</h4>
-                            {assignment.userSubmission ? (
+                            <h4 className="font-medium text-lg">{assignment.title}</h4>
+                            <Badge variant="outline">{assignment.totalPoints} points</Badge>
+                            {userSubmission && (
                               <Badge
                                 variant={
-                                  assignment.userSubmission.status === "graded"
+                                  userSubmission.status === "graded"
                                     ? "default"
-                                    : assignment.userSubmission.status === "submitted"
+                                    : userSubmission.status === "submitted"
                                       ? "secondary"
-                                      : "destructive"
+                                      : "outline"
                                 }
                               >
-                                {assignment.userSubmission.status === "graded"
+                                {userSubmission.status === "graded"
                                   ? "Graded"
-                                  : assignment.userSubmission.status === "submitted"
+                                  : userSubmission.status === "submitted"
                                     ? "Submitted"
-                                    : "Late"}
-                              </Badge>
-                            ) : (
-                              <Badge variant={new Date(assignment.dueDate) < new Date() ? "destructive" : "outline"}>
-                                {new Date(assignment.dueDate) < new Date() ? "Overdue" : "Pending"}
+                                    : "Draft"}
                               </Badge>
                             )}
+                            {isOverdue && <Badge variant="destructive">Overdue</Badge>}
                           </div>
                           <p className="text-gray-600 mb-3">{assignment.description}</p>
                           <div className="flex items-center space-x-4 text-sm text-gray-500">
                             <span className="flex items-center">
                               <Calendar className="h-4 w-4 mr-1" />
-                              Due: {assignment.dueDate.toLocaleDateString()}
+                              Due: {formatDateTime(assignment.dueDate)}
                             </span>
-                            <span className="flex items-center">
-                              <Award className="h-4 w-4 mr-1" />
-                              {assignment.totalPoints} points
-                            </span>
+                            {userSubmission?.grade !== undefined && (
+                              <span className="flex items-center">
+                                <Award className="h-4 w-4 mr-1" />
+                                Grade: {userSubmission.grade}/{assignment.totalPoints}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div className="flex flex-col space-y-2">
-                          {assignment.userSubmission ? (
-                            <div className="text-right">
-                              {assignment.userSubmission.status === "graded" && assignment.userSubmission.grade && (
-                                <div>
-                                  <p className="text-lg font-bold text-green-600">
-                                    {assignment.userSubmission.grade}/{assignment.totalPoints}
-                                  </p>
-                                  <p className="text-sm text-gray-500">
-                                    {Math.round((assignment.userSubmission.grade / assignment.totalPoints) * 100)}%
-                                  </p>
-                                </div>
-                              )}
-                              {assignment.userSubmission.feedback && (
-                                <p className="text-xs text-gray-600 mt-2 max-w-xs">
-                                  Feedback: {assignment.userSubmission.feedback}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <Button
-                              onClick={() => {
-                                setSelectedAssignment(assignment)
-                                setShowSubmissionDialog(true)
-                              }}
-                              disabled={new Date(assignment.dueDate) < new Date()}
-                            >
+                        <div className="flex space-x-2">
+                          {assignment.attachments && assignment.attachments.length > 0 && (
+                            <Button size="sm" variant="outline" asChild>
+                              <a href={assignment.attachments[0]} target="_blank" rel="noopener noreferrer">
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </a>
+                            </Button>
+                          )}
+                          {!userSubmission && (
+                            <Button size="sm" onClick={() => setSelectedAssignment(assignment)}>
                               Submit
+                            </Button>
+                          )}
+                          {userSubmission && userSubmission.status !== "graded" && (
+                            <Button size="sm" variant="outline" onClick={() => setSelectedAssignment(assignment)}>
+                              Edit Submission
                             </Button>
                           )}
                         </div>
                       </div>
 
-                      {assignment.attachments && assignment.attachments.length > 0 && (
-                        <div className="mt-4 pt-4 border-t">
-                          <Label className="text-sm font-medium">Assignment Files:</Label>
-                          <div className="flex space-x-2 mt-2">
-                            {assignment.attachments.map((url, index) => (
-                              <Button key={index} size="sm" variant="outline" asChild>
-                                <a href={url} target="_blank" rel="noopener noreferrer">
+                      {userSubmission && (
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                          <h5 className="font-medium mb-2">Your Submission</h5>
+                          <p className="text-sm text-gray-600 mb-2">{userSubmission.content}</p>
+                          <p className="text-xs text-gray-500">
+                            Submitted: {formatDateTime(userSubmission.submittedAt)}
+                          </p>
+                          {userSubmission.attachments && userSubmission.attachments.length > 0 && (
+                            <div className="mt-2">
+                              <Button size="sm" variant="outline" asChild>
+                                <a href={userSubmission.attachments[0]} target="_blank" rel="noopener noreferrer">
                                   <Download className="h-3 w-3 mr-1" />
-                                  File {index + 1}
+                                  View Attachment
                                 </a>
                               </Button>
-                            ))}
-                          </div>
+                            </div>
+                          )}
+                          {userSubmission.feedback && (
+                            <div className="mt-2 p-2 bg-blue-50 rounded">
+                              <p className="text-sm font-medium text-blue-800">Teacher Feedback:</p>
+                              <p className="text-sm text-blue-700">{userSubmission.feedback}</p>
+                            </div>
+                          )}
                         </div>
                       )}
                     </CardContent>
                   </Card>
-                ))
+                )
+              })}
+
+              {assignments.length === 0 && (
+                <div className="text-center py-12">
+                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments yet</h3>
+                  <p className="text-gray-500">Your teacher hasn't posted any assignments yet.</p>
+                </div>
               )}
             </div>
           </TabsContent>
 
-          {/* Performance Tab */}
-          <TabsContent value="performance" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Performance Chart */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Topic-wise Performance</CardTitle>
-                  <CardDescription>Your scores compared to class average</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={performanceData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="topic" />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar dataKey="score" fill="#3b82f6" name="Your Score" />
-                      <Bar dataKey="average" fill="#e5e7eb" name="Class Average" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
+          {/* Content Tab */}
+          <TabsContent value="content" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {content.map((item) => (
+                <Card key={item.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                        {item.type === "pdf" && <FileText className="h-5 w-5 text-green-600" />}
+                        {item.type === "image" && <BookOpen className="h-5 w-5 text-green-600" />}
+                        {item.type === "video" && <Video className="h-5 w-5 text-green-600" />}
+                        {item.type === "link" && <BookOpen className="h-5 w-5 text-green-600" />}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium">{item.title}</h4>
+                        <p className="text-sm text-gray-500">{item.topic}</p>
+                        <p className="text-xs text-gray-400 mt-1">{formatDate(item.uploadedAt)}</p>
+                        {CloudinaryService.isImageFile(item.url) && (
+                          <img
+                            src={
+                              CloudinaryService.getOptimizedUrl(item.url, {
+                                width: 200,
+                                height: 150 || "/placeholder.svg",
+                              }) || "/placeholder.svg"
+                            }
+                            alt={item.title}
+                            className="mt-2 rounded border max-w-full h-auto"
+                          />
+                        )}
+                        <Button size="sm" className="mt-2" asChild>
+                          <a href={item.url} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-3 w-3 mr-1" />
+                            {item.type === "link" ? "Visit" : "Download"}
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
 
-              {/* Progress Over Time */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Progress Over Time</CardTitle>
-                  <CardDescription>Your improvement trend</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart
-                      data={[
-                        { week: "Week 1", score: 75 },
-                        { week: "Week 2", score: 78 },
-                        { week: "Week 3", score: 82 },
-                        { week: "Week 4", score: 85 },
-                        { week: "Week 5", score: 88 },
-                      ]}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="week" />
-                      <YAxis />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="score" stroke="#3b82f6" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              {/* Statistics */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Your Statistics</CardTitle>
-                  <CardDescription>Key performance metrics</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-blue-600">{Math.floor(Math.random() * 20) + 75}%</p>
-                      <p className="text-sm text-gray-500">Overall Average</p>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">
-                        {userAssignments.filter((a) => a.userSubmission?.status === "graded").length}
-                      </p>
-                      <p className="text-sm text-gray-500">Completed</p>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-orange-600">
-                        {userAssignments.filter((a) => !a.userSubmission && new Date(a.dueDate) > new Date()).length}
-                      </p>
-                      <p className="text-sm text-gray-500">Pending</p>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <p className="text-2xl font-bold text-purple-600">
-                        #{Math.floor(Math.random() * classroom.students.length) + 1}
-                      </p>
-                      <p className="text-sm text-gray-500">Class Rank</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Recent Grades */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Grades</CardTitle>
-                  <CardDescription>Your latest assignment scores</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {userAssignments
-                      .filter((a) => a.userSubmission?.status === "graded")
-                      .slice(0, 5)
-                      .map((assignment) => (
-                        <div key={assignment.id} className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium">{assignment.title}</p>
-                            <p className="text-sm text-gray-500">{assignment.dueDate.toLocaleDateString()}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-lg">
-                              {assignment.userSubmission?.grade}/{assignment.totalPoints}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {assignment.userSubmission?.grade
-                                ? Math.round((assignment.userSubmission.grade / assignment.totalPoints) * 100)
-                                : 0}
-                              %
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    {userAssignments.filter((a) => a.userSubmission?.status === "graded").length === 0 && (
-                      <p className="text-center text-gray-500 py-4">No graded assignments yet</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              {content.length === 0 && (
+                <div className="col-span-full text-center py-12">
+                  <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No resources yet</h3>
+                  <p className="text-gray-500">Your teacher hasn't uploaded any learning materials yet.</p>
+                </div>
+              )}
             </div>
           </TabsContent>
 
-          {/* Ask Doubt Tab */}
-          <TabsContent value="doubt" className="space-y-6">
+          {/* Grades Tab */}
+          <TabsContent value="grades" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>AI Study Assistant</CardTitle>
-                <CardDescription>
-                  Ask questions about {classroom.subject} concepts, assignments, or study strategies
-                </CardDescription>
+                <CardTitle>Grade Summary</CardTitle>
+                <CardDescription>Your performance overview</CardDescription>
               </CardHeader>
               <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="text-center p-4 border rounded-lg">
+                    <div className="text-2xl font-bold text-blue-600">{completedAssignments.length}</div>
+                    <p className="text-sm text-gray-500">Graded Assignments</p>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {averageGrade > 0 ? Math.round(averageGrade) : "--"}%
+                    </div>
+                    <p className="text-sm text-gray-500">Average Grade</p>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {grades.reduce((sum, grade) => sum + grade, 0)}
+                    </div>
+                    <p className="text-sm text-gray-500">Total Points Earned</p>
+                  </div>
+                </div>
+
                 <div className="space-y-4">
-                  <div className="h-96 border rounded-lg p-4 overflow-y-auto bg-gray-50">
-                    {chatMessages.length === 0 ? (
-                      <div className="text-center text-gray-500 mt-20">
-                        <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                        <p>Start a conversation with your AI study assistant</p>
-                        <p className="text-sm mt-2">Ask about concepts, homework help, or study tips</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {chatMessages.map((message) => (
-                          <div
-                            key={message.id}
-                            className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-                          >
-                            <div
-                              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                                message.sender === "user" ? "bg-blue-600 text-white" : "bg-white border"
-                              }`}
-                            >
-                              <p className="text-sm">{message.content}</p>
-                            </div>
+                  {completedAssignments.map((assignment) => {
+                    const submission = assignment.submissions[userProfile?.uid || ""]
+                    const percentage = ((submission.grade || 0) / assignment.totalPoints) * 100
+
+                    return (
+                      <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div>
+                          <h4 className="font-medium">{assignment.title}</h4>
+                          <p className="text-sm text-gray-500">Submitted: {formatDate(submission.submittedAt)}</p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold">
+                            {submission.grade}/{assignment.totalPoints}
                           </div>
-                        ))}
+                          <div
+                            className={`text-sm ${
+                              percentage >= 90
+                                ? "text-green-600"
+                                : percentage >= 80
+                                  ? "text-blue-600"
+                                  : percentage >= 70
+                                    ? "text-yellow-600"
+                                    : "text-red-600"
+                            }`}
+                          >
+                            {Math.round(percentage)}%
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                    )
+                  })}
 
-                  <div className="flex space-x-2">
-                    <Input
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="Ask a question about the subject..."
-                      onKeyPress={(e) => e.key === "Enter" && handleAIChat()}
-                    />
-                    <Button onClick={handleAIChat}>Send</Button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setChatInput("Can you explain the main concepts from today's lesson?")
-                        handleAIChat()
-                      }}
-                    >
-                      Explain today's lesson
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setChatInput("Help me understand this assignment better")
-                        handleAIChat()
-                      }}
-                    >
-                      Assignment help
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setChatInput("What should I study for the upcoming test?")
-                        handleAIChat()
-                      }}
-                    >
-                      Study suggestions
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setChatInput("Can you create a study schedule for me?")
-                        handleAIChat()
-                      }}
-                    >
-                      Study schedule
-                    </Button>
-                  </div>
+                  {completedAssignments.length === 0 && (
+                    <div className="text-center py-8">
+                      <Award className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">No grades yet</p>
+                      <p className="text-sm text-gray-400">Complete assignments to see your grades here</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -599,84 +580,49 @@ export default function StudentClassroomPage() {
         </Tabs>
 
         {/* Assignment Submission Dialog */}
-        <Dialog open={showSubmissionDialog} onOpenChange={setShowSubmissionDialog}>
-          <DialogContent className="max-w-md">
+        <Dialog open={!!selectedAssignment} onOpenChange={() => setSelectedAssignment(null)}>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Submit Assignment</DialogTitle>
-              <DialogDescription>{selectedAssignment?.title}</DialogDescription>
+              <DialogTitle>Submit Assignment: {selectedAssignment?.title}</DialogTitle>
+              <DialogDescription>Complete your assignment submission below</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmitAssignment} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="submissionText">Your Answer</Label>
+                <Label htmlFor="submission">Your Response</Label>
                 <Textarea
-                  id="submissionText"
+                  id="submission"
                   value={submissionText}
                   onChange={(e) => setSubmissionText(e.target.value)}
-                  placeholder="Type your answer here..."
-                  rows={4}
+                  placeholder="Type your assignment response here..."
+                  rows={6}
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="submissionFile">Attachment (optional)</Label>
-                <Input
-                  id="submissionFile"
-                  type="file"
-                  onChange={(e) => setSubmissionFile(e.target.files?.[0] || null)}
+                <Label>Attachment (Optional)</Label>
+                <FileUpload
+                  onUploadComplete={(url, filename, publicId) => {
+                    setSubmissionFile({ url, filename })
+                  }}
+                  acceptedTypes={["application/pdf", ".doc", ".docx", ".txt", "image/*"]}
+                  maxSizeMB={10}
+                  disabled={submitting}
                 />
               </div>
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setShowSubmissionDialog(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelectedAssignment(null)}
+                  disabled={submitting}
+                >
                   Cancel
                 </Button>
-                <Button type="submit">Submit Assignment</Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Submitting..." : "Submit Assignment"}
+                </Button>
               </div>
             </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* AI Chat Dialog */}
-        <Dialog open={showAIChat} onOpenChange={setShowAIChat}>
-          <DialogContent className="max-w-2xl h-[600px] flex flex-col">
-            <DialogHeader>
-              <DialogTitle>AI Study Assistant</DialogTitle>
-              <DialogDescription>Get help with {classroom.subject} concepts and assignments</DialogDescription>
-            </DialogHeader>
-
-            <div className="flex-1 overflow-y-auto border rounded-lg p-4 bg-gray-50">
-              {chatMessages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-20">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p>Ask me anything about {classroom.subject}!</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {chatMessages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                          message.sender === "user" ? "bg-blue-600 text-white" : "bg-white border"
-                        }`}
-                      >
-                        <p className="text-sm">{message.content}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex space-x-2 pt-4 border-t">
-              <Input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask a question..."
-                onKeyPress={(e) => e.key === "Enter" && handleAIChat()}
-              />
-              <Button onClick={handleAIChat}>Send</Button>
-            </div>
           </DialogContent>
         </Dialog>
       </div>

@@ -5,7 +5,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { useFirestoreOperations } from "@/lib/hooks/use-firestore"
-import { useFirebaseStorage } from "@/lib/hooks/use-storage"
 import { SidebarLayout } from "@/components/layout/sidebar-layout"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import { ErrorBoundary } from "@/components/ui/error-boundary"
@@ -16,9 +15,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Progress } from "@/components/ui/progress"
+import { FileUpload } from "@/components/ui/file-upload"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, Loader2, BookOpen, Calendar, Users, X } from "lucide-react"
+import { Loader2, BookOpen, Calendar, Users } from "lucide-react"
+import { CurriculumUploader } from "@/components/forms/curriculum-uploader"
+import { CloudinaryService } from "@/lib/cloudinary"
 
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -43,20 +44,22 @@ function CreateClassroomContent() {
   const router = useRouter()
   const { toast } = useToast()
   const { addDocument, loading: firestoreLoading } = useFirestoreOperations()
-  const { uploadFile, uploadState, resetState } = useFirebaseStorage()
 
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     subject: "",
+    gradeRange: "",
+    meetLink: "",
     schedule: {
       days: [] as string[],
       time: "",
     },
   })
 
-  const [curriculumFile, setCurriculumFile] = useState<File | null>(null)
-  const [timetableFile, setTimetableFile] = useState<File | null>(null)
+  const [curriculumFile, setCurriculumFile] = useState<{ url: string; publicId: string } | null>(null)
+  const [timetableFile, setTimetableFile] = useState<{ url: string; publicId: string } | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const generateInviteCode = () => {
@@ -73,13 +76,28 @@ function CreateClassroomContent() {
     }))
   }
 
+  const handleCurriculumUpload = async (file: File) => {
+    setIsUploading(true)
+    try {
+      const res = await CloudinaryService.uploadFile(file)
+      setCurriculumFile({ url: res.secure_url, publicId: res.public_id })
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to upload curriculum file.", variant: "destructive" })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const handleTimetableUpload = (url: string, filename: string, publicId: string) => {
+    setTimetableFile({ url, publicId })
+  }
+
   const handleFileRemove = (type: "curriculum" | "timetable") => {
     if (type === "curriculum") {
       setCurriculumFile(null)
     } else {
       setTimetableFile(null)
     }
-    resetState()
   }
 
   const validateForm = () => {
@@ -107,38 +125,41 @@ function CreateClassroomContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userProfile || !validateForm()) return
+    if (!curriculumFile) {
+      toast({ title: "Error", description: "Please upload the curriculum file before submitting.", variant: "destructive" })
+      return
+    }
+    if (!timetableFile) {
+      toast({ title: "Error", description: "Please upload the timetable file before submitting.", variant: "destructive" })
+      return
+    }
+    if (isUploading) {
+      toast({ title: "Uploading", description: "Please wait for all files to finish uploading.", variant: "destructive" })
+      return
+    }
 
     setSubmitting(true)
-
     try {
-      let curriculumUrl = ""
-      let timetableUrl = ""
-
-      // Upload files if provided
-      if (curriculumFile) {
-        const curriculumPath = `classrooms/${userProfile.uid}/${Date.now()}_curriculum_${curriculumFile.name}`
-        curriculumUrl = await uploadFile(curriculumFile, curriculumPath, ["application/pdf"])
-      }
-
-      if (timetableFile) {
-        const timetablePath = `classrooms/${userProfile.uid}/${Date.now()}_timetable_${timetableFile.name}`
-        timetableUrl = await uploadFile(timetableFile, timetablePath, ["application/pdf", "image/*"])
-      }
-
-      // Create classroom document
+      // Create classroom document with Cloudinary URLs
       const classroomData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
         subject: formData.subject,
+        gradeRange: formData.gradeRange,
+        meetLink: formData.meetLink,
         teacherId: userProfile.uid,
         teacherName: userProfile.displayName,
         schedule: formData.schedule,
         students: [],
         inviteCode: generateInviteCode(),
-        curriculumUrl,
-        timetableUrl,
+        curriculumUrl: curriculumFile.url,
+        curriculumPublicId: curriculumFile.publicId,
+        timetableUrl: timetableFile.url,
+        timetablePublicId: timetableFile.publicId,
         curriculumProgress: 0,
         isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       }
 
       const classroomId = await addDocument("classrooms", classroomData)
@@ -161,7 +182,7 @@ function CreateClassroomContent() {
     }
   }
 
-  const isLoading = submitting || firestoreLoading || uploadState.loading
+  const isLoading = submitting || firestoreLoading
 
   return (
     <SidebarLayout role="teacher">
@@ -212,6 +233,39 @@ function CreateClassroomContent() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gradeRange">Target Grade/Age Range</Label>
+                <Select
+                  value={formData.gradeRange}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, gradeRange: value }))}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select grade range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="elementary">Elementary (K-5)</SelectItem>
+                    <SelectItem value="middle">Middle School (6-8)</SelectItem>
+                    <SelectItem value="high">High School (9-12)</SelectItem>
+                    <SelectItem value="college">College</SelectItem>
+                    <SelectItem value="adult">Adult Education</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="meetLink">Google Meet Link</Label>
+                <Input
+                  id="meetLink"
+                  type="url"
+                  value={formData.meetLink}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, meetLink: e.target.value }))}
+                  placeholder="https://meet.google.com/..."
+                  disabled={isLoading}
+                />
+                <p className="text-xs text-gray-500">Optional: Add a permanent Google Meet link for this class</p>
               </div>
 
               <div className="space-y-2">
@@ -278,93 +332,43 @@ function CreateClassroomContent() {
           {/* File Uploads */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <Upload className="h-5 w-5 mr-2" />
-                Resources
-              </CardTitle>
+              <CardTitle>Resources</CardTitle>
               <CardDescription>Upload curriculum and timetable documents (optional)</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="curriculum">Curriculum PDF</Label>
-                {curriculumFile ? (
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-                    <div className="flex items-center space-x-2">
-                      <BookOpen className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium">{curriculumFile.name}</span>
-                      <span className="text-xs text-gray-500">
-                        ({(curriculumFile.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleFileRemove("curriculum")}
-                      disabled={isLoading}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Input
-                    id="curriculum"
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setCurriculumFile(e.target.files?.[0] || null)}
-                    disabled={isLoading}
-                  />
-                )}
-                <p className="text-xs text-gray-500">Upload a PDF containing the curriculum outline</p>
+                <Label>Curriculum (Optional)</Label>
+                <CurriculumUploader
+                  onUpload={(data) => {
+                    // Use fileUrl and publicId from data
+                    setCurriculumFile({
+                      url: data.fileUrl,
+                      publicId: data.publicId,
+                    })
+                  }}
+                  onError={(error: string) =>
+                    toast({
+                      title: "Upload Error",
+                      description: error,
+                      variant: "destructive",
+                    })
+                  }
+                  disabled={isLoading || isUploading}
+                />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="timetable">Weekly Timetable</Label>
-                {timetableFile ? (
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-green-600" />
-                      <span className="text-sm font-medium">{timetableFile.name}</span>
-                      <span className="text-xs text-gray-500">
-                        ({(timetableFile.size / 1024 / 1024).toFixed(2)} MB)
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleFileRemove("timetable")}
-                      disabled={isLoading}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Input
-                    id="timetable"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => setTimetableFile(e.target.files?.[0] || null)}
-                    disabled={isLoading}
-                  />
-                )}
-                <p className="text-xs text-gray-500">Upload your weekly timetable (PDF or image)</p>
+                <Label>Weekly Timetable (Optional)</Label>
+                <FileUpload
+                  onUploadComplete={(url: string, filename: string, publicId?: string) => {
+                    // Ensure all arguments are strings
+                    handleTimetableUpload(url, filename, publicId || "")
+                  }}
+                  acceptedTypes={["application/pdf", "image/*"]}
+                  maxSizeMB={10}
+                  disabled={isLoading || isUploading}
+                />
               </div>
-
-              {/* Upload Progress */}
-              {uploadState.loading && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span>Uploading files...</span>
-                    <span>{Math.round(uploadState.progress)}%</span>
-                  </div>
-                  <Progress value={uploadState.progress} />
-                </div>
-              )}
-
-              {uploadState.error && (
-                <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{uploadState.error}</div>
-              )}
             </CardContent>
           </Card>
 
@@ -373,7 +377,7 @@ function CreateClassroomContent() {
             <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isUploading || !curriculumFile || !timetableFile || submitting}>
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
