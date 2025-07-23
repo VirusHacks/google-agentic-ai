@@ -31,7 +31,9 @@ import {
   TrendingUp,
   Award,
   ExternalLink,
+  Brain,
 } from "lucide-react"
+import { VisualAidGenerator } from "@/components/ui/visual-aid-generator"
 
 // Helper to format dates from Firestore Timestamp or native Date
 const formatDate = (d: Timestamp | Date): string => {
@@ -211,10 +213,11 @@ export default function StudentClassroomPage() {
           </div>
 
           <Tabs defaultValue="overview" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="assignments">Assignments</TabsTrigger>
               <TabsTrigger value="content">Resources</TabsTrigger>
+              <TabsTrigger value="visual-aids">Visual Aids</TabsTrigger>
               <TabsTrigger value="progress">Progress</TabsTrigger>
             </TabsList>
 
@@ -242,20 +245,20 @@ export default function StudentClassroomPage() {
                     {classroom.curriculumUrl && (
                       <div>
                         <Label className="text-sm font-medium text-gray-700">Curriculum</Label>
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex flex-col gap-2 mt-2">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 bg-transparent"
-                            onClick={() => classroom.curriculumUrl && openPdfViewer(classroom.curriculumUrl, "Classroom Curriculum")}
+                            className="w-full bg-transparent"
+                            onClick={() => openPdfViewer(classroom.curriculumUrl, "Classroom Curriculum")}
                           >
                             <FileText className="h-3 w-3 mr-2" />
-                            View PDF
+                            View Curriculum PDF
                           </Button>
-                          <Button size="sm" variant="outline" className="flex-1 bg-transparent" asChild>
-                            <a href={classroom.curriculumUrl} target="_blank" rel="noopener noreferrer" download>
+                          <Button size="sm" variant="outline" className="w-full bg-transparent" asChild>
+                            <a href={classroom.curriculumUrl} target="_blank" rel="noopener noreferrer">
                               <Download className="h-3 w-3 mr-2" />
-                              Download
+                              Download PDF
                             </a>
                           </Button>
                         </div>
@@ -429,6 +432,22 @@ export default function StudentClassroomPage() {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Visual Aids Tab */}
+            <TabsContent value="visual-aids" className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold">Visual Aid Generator</h3>
+                  <p className="text-gray-600">Create and analyze educational diagrams with AI assistance</p>
+                </div>
+                <Badge variant="outline" className="w-fit">
+                  <Brain className="h-3 w-3 mr-1" />
+                  AI Powered
+                </Badge>
+              </div>
+
+              <VisualAidGenerator />
             </TabsContent>
 
             {/* Assignments Tab */}
@@ -606,12 +625,12 @@ export default function StudentClassroomPage() {
                           <div className="flex gap-2">
                             <Button size="sm" variant="outline" onClick={() => openPdfViewer(item.url, item.title)}>
                               <FileText className="h-3 w-3 mr-1" />
-                              View PDF
+                              Preview
                             </Button>
                             <Button size="sm" variant="outline" asChild>
-                              <a href={item.url} target="_blank" rel="noopener noreferrer" download>
-                                <Download className="h-3 w-3 mr-1" />
-                                Download
+                              <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                Open
                               </a>
                             </Button>
                           </div>
