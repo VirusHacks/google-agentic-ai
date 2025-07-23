@@ -18,8 +18,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { UploadThingPDFUpload } from "@/components/ui/uploadthing-pdf-upload"
 import { UploadThingFileUpload } from "@/components/ui/uploadthing-file-upload"
 import { UploadThingFileDisplay } from "@/components/ui/uploadthing-file-display"
+import { PDFParserService, type ParsedCurriculum, type ParsedTimetable } from "@/lib/pdf-parser-service"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, BookOpen, Calendar, Users, Upload, X } from "lucide-react"
+import { Loader2, BookOpen, Calendar, Users, Upload, X, Brain } from "lucide-react"
 
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -70,6 +71,9 @@ function CreateClassroomContent() {
   } | null>(null)
 
   const [submitting, setSubmitting] = useState(false)
+  const [parsingPDFs, setParsingPDFs] = useState(false)
+  const [parsedCurriculum, setParsedCurriculum] = useState<ParsedCurriculum | null>(null)
+  const [parsedTimetable, setParsedTimetable] = useState<ParsedTimetable | null>(null)
 
   const generateInviteCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -85,24 +89,77 @@ function CreateClassroomContent() {
     }))
   }
 
-  const handleCurriculumUpload = (url: string, filename: string, key: string) => {
+  const handleCurriculumUpload = async (url: string, filename: string, key: string) => {
     setCurriculumFile({ url, key, filename })
     toast({
       title: "Curriculum Uploaded",
       description: `${filename} uploaded successfully to UploadThing`,
     })
+
+    // Automatically parse the curriculum PDF
+    try {
+      setParsingPDFs(true)
+      toast({
+        title: "AI Analysis Started",
+        description: "Analyzing curriculum content with AI...",
+      })
+
+      const parsed = await PDFParserService.parseCurriculumPDF(url, "temp-id")
+      setParsedCurriculum(parsed)
+
+      toast({
+        title: "AI Analysis Complete",
+        description: "Curriculum has been analyzed and structured!",
+      })
+    } catch (error: any) {
+      console.error("Error parsing curriculum:", error)
+      toast({
+        title: "AI Analysis Failed",
+        description: "Could not analyze curriculum, but file was uploaded successfully",
+        variant: "destructive",
+      })
+    } finally {
+      setParsingPDFs(false)
+    }
   }
 
-  const handleTimetableUpload = (url: string, filename: string, key: string) => {
+  const handleTimetableUpload = async (url: string, filename: string, key: string) => {
     setTimetableFile({ url, key, filename })
     toast({
       title: "Timetable Uploaded",
       description: `${filename} uploaded successfully to UploadThing`,
     })
+
+    // Automatically parse the timetable PDF
+    try {
+      setParsingPDFs(true)
+      toast({
+        title: "AI Analysis Started",
+        description: "Analyzing timetable structure with AI...",
+      })
+
+      const parsed = await PDFParserService.parseTimetablePDF(url, "temp-id")
+      setParsedTimetable(parsed)
+
+      toast({
+        title: "AI Analysis Complete",
+        description: "Timetable has been analyzed and structured!",
+      })
+    } catch (error: any) {
+      console.error("Error parsing timetable:", error)
+      toast({
+        title: "AI Analysis Failed",
+        description: "Could not analyze timetable, but file was uploaded successfully",
+        variant: "destructive",
+      })
+    } finally {
+      setParsingPDFs(false)
+    }
   }
 
   const removeCurriculumFile = () => {
     setCurriculumFile(null)
+    setParsedCurriculum(null)
     toast({
       title: "File Removed",
       description: "Curriculum file removed",
@@ -111,6 +168,7 @@ function CreateClassroomContent() {
 
   const removeTimetableFile = () => {
     setTimetableFile(null)
+    setParsedTimetable(null)
     toast({
       title: "File Removed",
       description: "Timetable file removed",
@@ -145,7 +203,7 @@ function CreateClassroomContent() {
 
     setSubmitting(true)
     try {
-      // Create classroom document with UploadThing URLs
+      // Create classroom document with UploadThing URLs and parsed data
       const classroomData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
@@ -160,9 +218,11 @@ function CreateClassroomContent() {
         curriculumUrl: curriculumFile?.url || "",
         curriculumKey: curriculumFile?.key || "",
         curriculumFilename: curriculumFile?.filename || "",
+        curriculumParsed: parsedCurriculum || null,
         timetableUrl: timetableFile?.url || "",
         timetableKey: timetableFile?.key || "",
         timetableFilename: timetableFile?.filename || "",
+        timetableParsed: parsedTimetable || null,
         curriculumProgress: 0,
         isActive: true,
         createdAt: new Date(),
@@ -171,10 +231,26 @@ function CreateClassroomContent() {
 
       const classroomId = await addDocument("classrooms", classroomData)
 
-      toast({
-        title: "Success",
-        description: "Classroom created successfully!",
-      })
+      // If we have PDFs but haven't parsed them yet, trigger parsing with the actual classroom ID
+      if ((curriculumFile && !parsedCurriculum) || (timetableFile && !parsedTimetable)) {
+        toast({
+          title: "Classroom Created",
+          description: "Classroom created! AI analysis will continue in the background.",
+        })
+
+        // Trigger background parsing with actual classroom ID
+        if (curriculumFile && !parsedCurriculum) {
+          PDFParserService.parseCurriculumPDF(curriculumFile.url, classroomId).catch(console.error)
+        }
+        if (timetableFile && !parsedTimetable) {
+          PDFParserService.parseTimetablePDF(timetableFile.url, classroomId).catch(console.error)
+        }
+      } else {
+        toast({
+          title: "Success",
+          description: "Classroom created successfully with AI-analyzed content!",
+        })
+      }
 
       router.push(`/teacher/classroom/${classroomId}`)
     } catch (error: any) {
@@ -197,7 +273,9 @@ function CreateClassroomContent() {
         <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Create New Classroom</h1>
-            <p className="text-gray-600 mt-2">Set up a new classroom for your students</p>
+            <p className="text-gray-600 mt-2">
+              Set up a new classroom for your students with AI-powered content analysis
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-8">
@@ -341,20 +419,28 @@ function CreateClassroomContent() {
               </CardContent>
             </Card>
 
-            {/* File Uploads */}
+            {/* File Uploads with AI Analysis */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center text-xl">
                   <Upload className="h-6 w-6 mr-3" />
-                  Resources
+                  Resources & AI Analysis
                 </CardTitle>
-                <CardDescription>Upload curriculum and timetable documents (optional)</CardDescription>
+                <CardDescription>
+                  Upload curriculum and timetable documents - AI will automatically analyze and structure the content
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-8">
                 <div className="space-y-4">
-                  <Label>Curriculum Document (Optional)</Label>
+                  <div className="flex items-center gap-2">
+                    <Label>Curriculum Document (Optional)</Label>
+                    {parsingPDFs && <Brain className="h-4 w-4 animate-pulse text-blue-600" />}
+                  </div>
                   {!curriculumFile ? (
-                    <UploadThingPDFUpload onUploadComplete={handleCurriculumUpload} disabled={isLoading} />
+                    <UploadThingPDFUpload
+                      onUploadComplete={handleCurriculumUpload}
+                      disabled={isLoading || parsingPDFs}
+                    />
                   ) : (
                     <div className="space-y-3">
                       <UploadThingFileDisplay
@@ -363,29 +449,60 @@ function CreateClassroomContent() {
                         title="Curriculum Document"
                         showPreview={true}
                       />
+                      {parsedCurriculum && (
+                        <Card className="bg-blue-50 border-blue-200">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center text-sm">
+                              <Brain className="h-4 w-4 mr-2 text-blue-600" />
+                              AI Analysis Results
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="text-xs text-gray-600 space-y-1">
+                              <p>
+                                <strong>Subject:</strong> {parsedCurriculum.subject}
+                              </p>
+                              <p>
+                                <strong>Grade Level:</strong> {parsedCurriculum.gradeLevel}
+                              </p>
+                              <p>
+                                <strong>Topics:</strong> {parsedCurriculum.topics.length} topics identified
+                              </p>
+                              <p>
+                                <strong>Objectives:</strong> {parsedCurriculum.objectives.length} learning objectives
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={removeCurriculumFile}
-                        disabled={isLoading}
+                        disabled={isLoading || parsingPDFs}
                       >
                         <X className="h-4 w-4 mr-2" />
                         Remove File
                       </Button>
                     </div>
                   )}
-                  <p className="text-xs text-gray-500">Upload a PDF containing the curriculum outline</p>
+                  <p className="text-xs text-gray-500">
+                    Upload a PDF containing the curriculum outline - AI will extract topics, objectives, and structure
+                  </p>
                 </div>
 
                 <div className="space-y-4">
-                  <Label>Weekly Timetable (Optional)</Label>
+                  <div className="flex items-center gap-2">
+                    <Label>Weekly Timetable (Optional)</Label>
+                    {parsingPDFs && <Brain className="h-4 w-4 animate-pulse text-blue-600" />}
+                  </div>
                   {!timetableFile ? (
                     <UploadThingFileUpload
                       onUploadComplete={handleTimetableUpload}
                       acceptedTypes={["application/pdf", "image/*"]}
                       maxSizeMB={10}
-                      disabled={isLoading}
+                      disabled={isLoading || parsingPDFs}
                     />
                   ) : (
                     <div className="space-y-3">
@@ -395,33 +512,86 @@ function CreateClassroomContent() {
                         title="Weekly Timetable"
                         showPreview={true}
                       />
+                      {parsedTimetable && (
+                        <Card className="bg-green-50 border-green-200">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center text-sm">
+                              <Brain className="h-4 w-4 mr-2 text-green-600" />
+                              AI Analysis Results
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <div className="text-xs text-gray-600 space-y-1">
+                              <p>
+                                <strong>Period:</strong> {parsedTimetable.period}
+                              </p>
+                              <p>
+                                <strong>Days:</strong> {parsedTimetable.schedule.length} days scheduled
+                              </p>
+                              <p>
+                                <strong>Time Slots:</strong>{" "}
+                                {parsedTimetable.schedule.reduce((total, day) => total + day.timeSlots.length, 0)} total
+                                slots
+                              </p>
+                              {parsedTimetable.breaks && (
+                                <p>
+                                  <strong>Breaks:</strong> {parsedTimetable.breaks.length} break periods
+                                </p>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={removeTimetableFile}
-                        disabled={isLoading}
+                        disabled={isLoading || parsingPDFs}
                       >
                         <X className="h-4 w-4 mr-2" />
                         Remove File
                       </Button>
                     </div>
                   )}
-                  <p className="text-xs text-gray-500">Upload your weekly timetable (PDF or image)</p>
+                  <p className="text-xs text-gray-500">
+                    Upload your weekly timetable (PDF or image) - AI will extract schedule, subjects, and time slots
+                  </p>
                 </div>
+
+                {parsingPDFs && (
+                  <Card className="bg-yellow-50 border-yellow-200">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <Loader2 className="h-5 w-5 animate-spin text-yellow-600" />
+                        <div>
+                          <p className="text-sm font-medium text-yellow-800">AI Analysis in Progress</p>
+                          <p className="text-xs text-yellow-600">
+                            Analyzing document content and extracting structured information...
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </CardContent>
             </Card>
 
             {/* Submit */}
             <div className="flex justify-end space-x-4 pb-8">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading || parsingPDFs}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading} size="lg">
+              <Button type="submit" disabled={isLoading || parsingPDFs} size="lg">
                 {isLoading ? (
                   <>
                     <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                     Creating...
+                  </>
+                ) : parsingPDFs ? (
+                  <>
+                    <Brain className="h-5 w-5 mr-2 animate-pulse" />
+                    AI Analyzing...
                   </>
                 ) : (
                   <>
