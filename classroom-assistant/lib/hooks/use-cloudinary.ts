@@ -3,24 +3,22 @@
 import { useState, useCallback } from "react"
 import { CloudinaryService, type CloudinaryUploadResponse } from "@/lib/cloudinary"
 
-interface StorageState {
+interface UploadState {
   loading: boolean
   progress: number
   error: string | null
   response: CloudinaryUploadResponse | null
 }
 
-export function useFirebaseStorage() {
-  const [uploadState, setUploadState] = useState<StorageState>({
+export function useCloudinaryUpload() {
+  const [uploadState, setUploadState] = useState<UploadState>({
     loading: false,
     progress: 0,
     error: null,
     response: null,
   })
 
-  const uploadFile = useCallback(async (file: File, path: string, acceptedTypes?: string[]): Promise<string> => {
-    console.warn("useFirebaseStorage is deprecated. Use useCloudinaryUpload instead.")
-
+  const uploadFile = useCallback(async (file: File, acceptedTypes?: string[]): Promise<CloudinaryUploadResponse> => {
     setUploadState({
       loading: true,
       progress: 0,
@@ -30,7 +28,7 @@ export function useFirebaseStorage() {
 
     try {
       // Validate file type if specified
-      if (acceptedTypes && acceptedTypes.length > 0) {
+      if (acceptedTypes && acceptedTypes.length > 0 && !acceptedTypes.includes("*")) {
         const fileExtension = file.name.split(".").pop()?.toLowerCase()
         const isValidType = acceptedTypes.some((type) => {
           if (type.startsWith(".")) {
@@ -47,6 +45,12 @@ export function useFirebaseStorage() {
         }
       }
 
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      if (file.size > maxSize) {
+        throw new Error("File size must be less than 10MB")
+      }
+
       const response = await CloudinaryService.uploadFile(file, (progress) => {
         setUploadState((prev) => ({
           ...prev,
@@ -61,7 +65,7 @@ export function useFirebaseStorage() {
         response,
       })
 
-      return response.secure_url
+      return response
     } catch (error: any) {
       const errorMessage = error.message || "Upload failed"
       setUploadState({

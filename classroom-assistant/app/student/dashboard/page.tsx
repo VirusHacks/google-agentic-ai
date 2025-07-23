@@ -14,7 +14,6 @@ import { DashboardSkeleton } from "@/components/ui/loading-skeleton"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -25,17 +24,23 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { BookOpen, Calendar, Clock, TrendingUp, Plus, CheckCircle, AlertCircle, FileText } from "lucide-react"
+import { BookOpen, Calendar, Clock, TrendingUp, Plus, CheckCircle, MessageCircle } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { CalendarWidget } from "@/components/ui/calendar-widget"
+import { ProgressTracker } from "@/components/ui/progress-tracker"
+import { AIAssistantStub } from "@/components/agents/ai-assistant-stub"
 import Link from "next/link"
 
 function StudentDashboardContent() {
   const { userProfile } = useAuth()
   const { toast } = useToast()
   const { updateDocument, loading: operationLoading } = useFirestoreOperations()
+  const router = useRouter()
 
   const [inviteCode, setInviteCode] = useState("")
   const [showJoinDialog, setShowJoinDialog] = useState(false)
   const [joiningClassroom, setJoiningClassroom] = useState(false)
+  const [showAIAssistant, setShowAIAssistant] = useState(false)
 
   // Fetch classrooms where user is a student
   const {
@@ -191,22 +196,24 @@ function StudentDashboardContent() {
     })
     .slice(0, 5)
 
-  const recentlyGraded = userAssignments
-    .filter((a) => a.submissions?.[userProfile?.uid || ""]?.status === "graded")
-    .sort((a, b) => {
-      const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt)
-      const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt)
-      return dateB.getTime() - dateA.getTime()
-    })
-    .slice(0, 3)
+  const overdueAssignments = userAssignments.filter((a) => {
+    const dueDate = a.dueDate?.toDate?.() || new Date(a.dueDate)
+    return dueDate < new Date() && !a.submissions?.[userProfile?.uid || ""]
+  })
 
   return (
     <SidebarLayout role="student">
       <div className="p-6 space-y-6">
         {/* Welcome Section */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {userProfile?.displayName}</h1>
-          <p className="text-gray-600">Here's your learning progress and upcoming tasks.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Welcome back, {userProfile?.displayName}</h1>
+            <p className="text-gray-600">Here's your learning progress and upcoming tasks.</p>
+          </div>
+          <Button onClick={() => setShowAIAssistant(true)}>
+            <MessageCircle className="h-4 w-4 mr-2" />
+            AI Tutor
+          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -316,13 +323,15 @@ function StudentDashboardContent() {
                 <Calendar className="h-6 w-6" />
                 <span>View Schedule</span>
               </Button>
-              <Button
-                variant="outline"
-                className="w-full h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
-              >
-                <BookOpen className="h-6 w-6" />
-                <span>Study Planner</span>
-              </Button>
+              <Link href="/agents/ai-tutor">
+                <Button
+                  variant="outline"
+                  className="w-full h-20 flex flex-col items-center justify-center space-y-2 bg-transparent"
+                >
+                  <BookOpen className="h-6 w-6" />
+                  <span>AI Tutor</span>
+                </Button>
+              </Link>
             </div>
           </CardContent>
         </Card>
@@ -344,156 +353,79 @@ function StudentDashboardContent() {
           </Card>
         )}
 
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* My Classrooms */}
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Calendar Widget */}
+          <div className="lg:col-span-2">
+            <CalendarWidget
+              events={upcomingAssignments.map((a) => ({
+                id: a.id,
+                title: a.title,
+                date: a.dueDate?.toDate?.() || new Date(a.dueDate),
+                type: "assignment" as const,
+                classroom: classrooms.find((c) => c.id === a.classroomId)?.name,
+              }))}
+              onEventClick={(event) => {
+                const assignment = upcomingAssignments.find((a) => a.id === event.id)
+                if (assignment) {
+                  router.push(`/student/classroom/${assignment.classroomId}`)
+                }
+              }}
+            />
+          </div>
+
+          {/* Progress Tracker */}
+          <ProgressTracker
+            data={{
+              completed: stats.completedAssignments,
+              pending: stats.pendingAssignments,
+              overdue: overdueAssignments.length,
+              total: userAssignments.length,
+              averageScore: stats.averageGrade,
+              streak: Math.floor(Math.random() * 7) + 1, // Mock streak data
+            }}
+          />
+        </div>
+
+        {/* My Classrooms */}
+        {classrooms.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>My Classrooms</CardTitle>
               <CardDescription>Your enrolled classes</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {classrooms.length === 0 ? (
-                  <div className="text-center py-8">
-                    <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 mb-4">No classrooms yet</p>
-                    <Button onClick={() => setShowJoinDialog(true)}>Join Your First Classroom</Button>
-                  </div>
-                ) : (
-                  classrooms.map((classroom) => (
-                    <Link key={classroom.id} href={`/student/classroom/${classroom.id}`}>
-                      <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center space-x-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {classrooms.map((classroom) => (
+                  <Link key={classroom.id} href={`/student/classroom/${classroom.id}`}>
+                    <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
                           <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
                             <BookOpen className="h-5 w-5 text-blue-600" />
                           </div>
-                          <div>
-                            <h3 className="font-medium">{classroom.name}</h3>
-                            <p className="text-sm text-gray-500">{classroom.subject}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{classroom.teacherName}</p>
-                          <p className="text-xs text-gray-500">
-                            {classroom.schedule?.days?.join(", ") || "No schedule"}
-                          </p>
-                        </div>
-                      </div>
-                    </Link>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Upcoming Assignments */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Upcoming Assignments</CardTitle>
-              <CardDescription>Tasks due soon</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {upcomingAssignments.length === 0 ? (
-                  <div className="text-center py-8">
-                    <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">No upcoming assignments</p>
-                  </div>
-                ) : (
-                  upcomingAssignments.map((assignment) => {
-                    const classroom = classrooms.find((c) => c.id === assignment.classroomId)
-                    const dueDate = assignment.dueDate?.toDate?.() || new Date(assignment.dueDate)
-                    const daysUntilDue = Math.ceil((dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-
-                    return (
-                      <Link key={assignment.id} href={`/student/classroom/${assignment.classroomId}`}>
-                        <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                          <div className="flex items-center space-x-3">
-                            <div className="h-10 w-10 rounded-lg bg-orange-100 flex items-center justify-center">
-                              <FileText className="h-5 w-5 text-orange-600" />
-                            </div>
-                            <div>
-                              <h3 className="font-medium">{assignment.title}</h3>
-                              <p className="text-sm text-gray-500">{classroom?.name}</p>
-                            </div>
-                          </div>
                           <div className="text-right">
-                            <Badge
-                              variant={daysUntilDue <= 1 ? "destructive" : daysUntilDue <= 3 ? "default" : "secondary"}
-                            >
-                              {daysUntilDue === 0
-                                ? "Due Today"
-                                : daysUntilDue === 1
-                                  ? "Due Tomorrow"
-                                  : `${daysUntilDue} days`}
-                            </Badge>
-                            <p className="text-xs text-gray-500 mt-1">{assignment.totalPoints} points</p>
+                            <p className="text-sm font-medium">{classroom.teacherName}</p>
+                            <p className="text-xs text-gray-500">
+                              {classroom.schedule?.days?.join(", ") || "No schedule"}
+                            </p>
                           </div>
-                        </div>
-                      </Link>
-                    )
-                  })
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Grades</CardTitle>
-            <CardDescription>Your latest assignment results</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentlyGraded.length === 0 ? (
-                <div className="text-center py-8">
-                  <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">No graded assignments yet</p>
-                </div>
-              ) : (
-                recentlyGraded.map((assignment) => {
-                  const classroom = classrooms.find((c) => c.id === assignment.classroomId)
-                  const submission = assignment.submissions?.[userProfile?.uid || ""]
-                  const percentage = submission?.grade
-                    ? Math.round((submission.grade / assignment.totalPoints) * 100)
-                    : 0
-
-                  return (
-                    <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                          <CheckCircle className="h-5 w-5 text-green-600" />
                         </div>
                         <div>
-                          <h3 className="font-medium">{assignment.title}</h3>
-                          <p className="text-sm text-gray-500">{classroom?.name}</p>
+                          <h3 className="font-medium">{classroom.name}</h3>
+                          <p className="text-sm text-gray-500">{classroom.subject}</p>
                         </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center space-x-2">
-                          <Badge
-                            variant={percentage >= 90 ? "default" : percentage >= 70 ? "secondary" : "destructive"}
-                          >
-                            {percentage}%
-                          </Badge>
-                          <span className="text-sm text-gray-600">
-                            {submission?.grade}/{assignment.totalPoints}
-                          </span>
-                        </div>
-                        {submission?.feedback && (
-                          <p className="text-xs text-gray-500 mt-1 max-w-xs truncate">{submission.feedback}</p>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* AI Assistant Dialog */}
+        <AIAssistantStub role="student" open={showAIAssistant} onOpenChange={setShowAIAssistant} />
       </div>
     </SidebarLayout>
   )

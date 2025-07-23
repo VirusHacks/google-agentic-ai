@@ -1,24 +1,39 @@
-import type { Timestamp } from "firebase/firestore"
+export interface User {
+  uid: string
+  email: string
+  displayName: string
+  role: "teacher" | "student"
+  avatarUrl?: string
+  avatarPublicId?: string
+  age?: number
+  grade?: string
+  createdAt: Date
+  updatedAt: Date
+}
 
 export interface Classroom {
   id: string
   name: string
   description: string
+  subject: string
+  gradeRange: string
   teacherId: string
   teacherName: string
-  subject: string
+  students: string[]
+  inviteCode: string
   schedule: {
     days: string[]
     time: string
   }
-  students: string[]
-  inviteCode: string
+  meetLink?: string
   curriculumUrl?: string
+  curriculumPublicId?: string
   timetableUrl?: string
+  timetablePublicId?: string
   curriculumProgress: number
   isActive: boolean
-  createdAt: Timestamp | Date
-  updatedAt: Timestamp | Date
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface Assignment {
@@ -26,23 +41,21 @@ export interface Assignment {
   classroomId: string
   title: string
   description: string
-  dueDate: Timestamp | Date
+  dueDate: Date
   totalPoints: number
   attachments: string[]
-  submissions: { [studentId: string]: Submission }
-  createdAt: Timestamp | Date
-  updatedAt: Timestamp | Date
-}
-
-export interface Submission {
-  studentId: string
-  studentName: string
-  submittedAt: Timestamp | Date
-  attachments: string[]
-  text?: string
-  grade?: number
-  feedback?: string
-  status: "submitted" | "graded" | "late"
+  submissions: {
+    [studentId: string]: {
+      studentId: string
+      submittedAt: Date
+      status: "draft" | "submitted" | "graded"
+      content: string
+      attachments: string[]
+      grade?: number
+      feedback?: string
+    }
+  }
+  createdAt: Date
 }
 
 export interface Content {
@@ -50,25 +63,51 @@ export interface Content {
   classroomId: string
   title: string
   type: "pdf" | "image" | "video" | "link"
-  url: string
   topic: string
-  uploadedAt: Timestamp | Date
+  url: string
+  publicId?: string
+  uploadedAt: Date
   uploadedBy: string
+}
+
+export interface Note {
+  id: string
+  classroomId: string
+  title: string
+  content: string
+  tags: string[]
+  fileUrl?: string
+  filePublicId?: string
+  filename?: string
+  fileType?: string
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Worksheet {
+  id: string
+  classroomId: string
+  title: string
+  description: string
+  subject: string
+  gradeLevel: string
+  difficulty: "easy" | "medium" | "hard"
+  fileUrl: string
+  filename: string
+  publicId: string
+  createdBy: string
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface StudentAnalytics {
   studentId: string
   classroomId: string
   assignmentsCompleted: number
+  assignmentsPending: number
+  assignmentsOverdue: number
   averageScore: number
-  topicScores: { [topic: string]: number }
-  lastActive: Timestamp | Date
-}
-
-export interface UserProfile {
-  uid: string
-  email: string
-  displayName: string
-  role: "teacher" | "student"
-  createdAt: Timestamp | Date
+  lastActive: Date
+  streak: number
 }
