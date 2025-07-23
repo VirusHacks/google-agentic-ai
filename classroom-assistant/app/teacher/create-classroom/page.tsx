@@ -15,11 +15,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { FileUpload } from "@/components/ui/file-upload"
+import { UploadThingPDFUpload } from "@/components/ui/uploadthing-pdf-upload"
+import { UploadThingFileUpload } from "@/components/ui/uploadthing-file-upload"
+import { UploadThingFileDisplay } from "@/components/ui/uploadthing-file-display"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, BookOpen, Calendar, Users } from "lucide-react"
-import { CurriculumUploader } from "@/components/forms/curriculum-uploader"
-import { CloudinaryService } from "@/lib/cloudinary"
+import { Loader2, BookOpen, Calendar, Users, Upload, X } from "lucide-react"
 
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -57,9 +57,18 @@ function CreateClassroomContent() {
     },
   })
 
-  const [curriculumFile, setCurriculumFile] = useState<{ url: string; publicId: string } | null>(null)
-  const [timetableFile, setTimetableFile] = useState<{ url: string; publicId: string } | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  const [curriculumFile, setCurriculumFile] = useState<{
+    url: string
+    key: string
+    filename: string
+  } | null>(null)
+
+  const [timetableFile, setTimetableFile] = useState<{
+    url: string
+    key: string
+    filename: string
+  } | null>(null)
+
   const [submitting, setSubmitting] = useState(false)
 
   const generateInviteCode = () => {
@@ -76,28 +85,36 @@ function CreateClassroomContent() {
     }))
   }
 
-  const handleCurriculumUpload = async (file: File) => {
-    setIsUploading(true)
-    try {
-      const res = await CloudinaryService.uploadFile(file)
-      setCurriculumFile({ url: res.secure_url, publicId: res.public_id })
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to upload curriculum file.", variant: "destructive" })
-    } finally {
-      setIsUploading(false)
-    }
+  const handleCurriculumUpload = (url: string, filename: string, key: string) => {
+    setCurriculumFile({ url, key, filename })
+    toast({
+      title: "Curriculum Uploaded",
+      description: `${filename} uploaded successfully to UploadThing`,
+    })
   }
 
-  const handleTimetableUpload = (url: string, filename: string, publicId: string) => {
-    setTimetableFile({ url, publicId })
+  const handleTimetableUpload = (url: string, filename: string, key: string) => {
+    setTimetableFile({ url, key, filename })
+    toast({
+      title: "Timetable Uploaded",
+      description: `${filename} uploaded successfully to UploadThing`,
+    })
   }
 
-  const handleFileRemove = (type: "curriculum" | "timetable") => {
-    if (type === "curriculum") {
-      setCurriculumFile(null)
-    } else {
-      setTimetableFile(null)
-    }
+  const removeCurriculumFile = () => {
+    setCurriculumFile(null)
+    toast({
+      title: "File Removed",
+      description: "Curriculum file removed",
+    })
+  }
+
+  const removeTimetableFile = () => {
+    setTimetableFile(null)
+    toast({
+      title: "File Removed",
+      description: "Timetable file removed",
+    })
   }
 
   const validateForm = () => {
@@ -125,22 +142,10 @@ function CreateClassroomContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userProfile || !validateForm()) return
-    if (!curriculumFile) {
-      toast({ title: "Error", description: "Please upload the curriculum file before submitting.", variant: "destructive" })
-      return
-    }
-    if (!timetableFile) {
-      toast({ title: "Error", description: "Please upload the timetable file before submitting.", variant: "destructive" })
-      return
-    }
-    if (isUploading) {
-      toast({ title: "Uploading", description: "Please wait for all files to finish uploading.", variant: "destructive" })
-      return
-    }
 
     setSubmitting(true)
     try {
-      // Create classroom document with Cloudinary URLs
+      // Create classroom document with UploadThing URLs
       const classroomData = {
         name: formData.name.trim(),
         description: formData.description.trim(),
@@ -152,10 +157,12 @@ function CreateClassroomContent() {
         schedule: formData.schedule,
         students: [],
         inviteCode: generateInviteCode(),
-        curriculumUrl: curriculumFile.url,
-        curriculumPublicId: curriculumFile.publicId,
-        timetableUrl: timetableFile.url,
-        timetablePublicId: timetableFile.publicId,
+        curriculumUrl: curriculumFile?.url || "",
+        curriculumKey: curriculumFile?.key || "",
+        curriculumFilename: curriculumFile?.filename || "",
+        timetableUrl: timetableFile?.url || "",
+        timetableKey: timetableFile?.key || "",
+        timetableFilename: timetableFile?.filename || "",
         curriculumProgress: 0,
         isActive: true,
         createdAt: new Date(),
@@ -186,212 +193,246 @@ function CreateClassroomContent() {
 
   return (
     <SidebarLayout role="teacher">
-      <div className="p-6 max-w-2xl mx-auto">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Create New Classroom</h1>
-          <p className="text-gray-600">Set up a new classroom for your students</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <BookOpen className="h-5 w-5 mr-2" />
-                Basic Information
-              </CardTitle>
-              <CardDescription>Enter the basic details for your classroom</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Classroom Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Mathematics Grade 10"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject *</Label>
-                <Select
-                  value={formData.subject}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, subject: value }))}
-                  disabled={isLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a subject" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUBJECTS.map((subject) => (
-                      <SelectItem key={subject} value={subject.toLowerCase().replace(/\s+/g, "-")}>
-                        {subject}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="gradeRange">Target Grade/Age Range</Label>
-                <Select
-                  value={formData.gradeRange}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, gradeRange: value }))}
-                  disabled={isLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select grade range" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="elementary">Elementary (K-5)</SelectItem>
-                    <SelectItem value="middle">Middle School (6-8)</SelectItem>
-                    <SelectItem value="high">High School (9-12)</SelectItem>
-                    <SelectItem value="college">College</SelectItem>
-                    <SelectItem value="adult">Adult Education</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="meetLink">Google Meet Link</Label>
-                <Input
-                  id="meetLink"
-                  type="url"
-                  value={formData.meetLink}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, meetLink: e.target.value }))}
-                  placeholder="https://meet.google.com/..."
-                  disabled={isLoading}
-                />
-                <p className="text-xs text-gray-500">Optional: Add a permanent Google Meet link for this class</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Brief description of the classroom and what students will learn"
-                  rows={3}
-                  disabled={isLoading}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Schedule */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Calendar className="h-5 w-5 mr-2" />
-                Schedule
-              </CardTitle>
-              <CardDescription>Set up the class schedule</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Class Days</Label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {DAYS_OF_WEEK.map((day) => (
-                    <div key={day} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={day}
-                        checked={formData.schedule.days.includes(day)}
-                        onCheckedChange={(checked) => handleDayToggle(day, checked as boolean)}
-                        disabled={isLoading}
-                      />
-                      <Label htmlFor={day} className="text-sm">
-                        {day}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="time">Class Time</Label>
-                <Input
-                  id="time"
-                  type="time"
-                  value={formData.schedule.time}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      schedule: { ...prev.schedule, time: e.target.value },
-                    }))
-                  }
-                  disabled={isLoading}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* File Uploads */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Resources</CardTitle>
-              <CardDescription>Upload curriculum and timetable documents (optional)</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label>Curriculum (Optional)</Label>
-                <CurriculumUploader
-                  onUpload={(data) => {
-                    // Use fileUrl and publicId from data
-                    setCurriculumFile({
-                      url: data.fileUrl,
-                      publicId: data.publicId,
-                    })
-                  }}
-                  onError={(error: string) =>
-                    toast({
-                      title: "Upload Error",
-                      description: error,
-                      variant: "destructive",
-                    })
-                  }
-                  disabled={isLoading || isUploading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Weekly Timetable (Optional)</Label>
-                <FileUpload
-                  onUploadComplete={(url: string, filename: string, publicId?: string) => {
-                    // Ensure all arguments are strings
-                    handleTimetableUpload(url, filename, publicId || "")
-                  }}
-                  acceptedTypes={["application/pdf", "image/*"]}
-                  maxSizeMB={10}
-                  disabled={isLoading || isUploading}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Submit */}
-          <div className="flex justify-end space-x-4">
-            <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isUploading || !curriculumFile || !timetableFile || submitting}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <Users className="h-4 w-4 mr-2" />
-                  Create Classroom
-                </>
-              )}
-            </Button>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900">Create New Classroom</h1>
+            <p className="text-gray-600 mt-2">Set up a new classroom for your students</p>
           </div>
-        </form>
+
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* Basic Information */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-xl">
+                  <BookOpen className="h-6 w-6 mr-3" />
+                  Basic Information
+                </CardTitle>
+                <CardDescription>Enter the basic details for your classroom</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Classroom Name *</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., Mathematics Grade 10"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject *</Label>
+                    <Select
+                      value={formData.subject}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, subject: value }))}
+                      disabled={isLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUBJECTS.map((subject) => (
+                          <SelectItem key={subject} value={subject.toLowerCase().replace(/\s+/g, "-")}>
+                            {subject}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="gradeRange">Target Grade/Age Range</Label>
+                    <Select
+                      value={formData.gradeRange}
+                      onValueChange={(value) => setFormData((prev) => ({ ...prev, gradeRange: value }))}
+                      disabled={isLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select grade range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="elementary">Elementary (K-5)</SelectItem>
+                        <SelectItem value="middle">Middle School (6-8)</SelectItem>
+                        <SelectItem value="high">High School (9-12)</SelectItem>
+                        <SelectItem value="college">College</SelectItem>
+                        <SelectItem value="adult">Adult Education</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="meetLink">Google Meet Link</Label>
+                    <Input
+                      id="meetLink"
+                      type="url"
+                      value={formData.meetLink}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, meetLink: e.target.value }))}
+                      placeholder="https://meet.google.com/..."
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brief description of the classroom and what students will learn"
+                    rows={4}
+                    disabled={isLoading}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Schedule */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-xl">
+                  <Calendar className="h-6 w-6 mr-3" />
+                  Schedule
+                </CardTitle>
+                <CardDescription>Set up the class schedule</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Class Days</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {DAYS_OF_WEEK.map((day) => (
+                      <div key={day} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={day}
+                          checked={formData.schedule.days.includes(day)}
+                          onCheckedChange={(checked) => handleDayToggle(day, checked as boolean)}
+                          disabled={isLoading}
+                        />
+                        <Label htmlFor={day} className="text-sm font-medium">
+                          {day}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="time">Class Time</Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={formData.schedule.time}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        schedule: { ...prev.schedule, time: e.target.value },
+                      }))
+                    }
+                    disabled={isLoading}
+                    className="max-w-xs"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* File Uploads */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center text-xl">
+                  <Upload className="h-6 w-6 mr-3" />
+                  Resources
+                </CardTitle>
+                <CardDescription>Upload curriculum and timetable documents (optional)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                <div className="space-y-4">
+                  <Label>Curriculum Document (Optional)</Label>
+                  {!curriculumFile ? (
+                    <UploadThingPDFUpload onUploadComplete={handleCurriculumUpload} disabled={isLoading} />
+                  ) : (
+                    <div className="space-y-3">
+                      <UploadThingFileDisplay
+                        url={curriculumFile.url}
+                        filename={curriculumFile.filename}
+                        title="Curriculum Document"
+                        showPreview={true}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={removeCurriculumFile}
+                        disabled={isLoading}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Remove File
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">Upload a PDF containing the curriculum outline</p>
+                </div>
+
+                <div className="space-y-4">
+                  <Label>Weekly Timetable (Optional)</Label>
+                  {!timetableFile ? (
+                    <UploadThingFileUpload
+                      onUploadComplete={handleTimetableUpload}
+                      acceptedTypes={["application/pdf", "image/*"]}
+                      maxSizeMB={10}
+                      disabled={isLoading}
+                    />
+                  ) : (
+                    <div className="space-y-3">
+                      <UploadThingFileDisplay
+                        url={timetableFile.url}
+                        filename={timetableFile.filename}
+                        title="Weekly Timetable"
+                        showPreview={true}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={removeTimetableFile}
+                        disabled={isLoading}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Remove File
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">Upload your weekly timetable (PDF or image)</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Submit */}
+            <div className="flex justify-end space-x-4 pb-8">
+              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading} size="lg">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-5 w-5 mr-2" />
+                    Create Classroom
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </SidebarLayout>
   )

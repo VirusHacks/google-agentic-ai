@@ -16,18 +16,32 @@ import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { FileUpload } from "@/components/ui/file-upload"
-import { CloudinaryService } from "@/lib/cloudinary"
+import { UploadThingFileUpload } from "@/components/ui/uploadthing-file-upload"
+import { UploadThingPDFViewer } from "@/components/ui/uploadthing-pdf-viewer"
+import { UploadThingService } from "@/lib/uploadthing-service"
 import { useToast } from "@/hooks/use-toast"
-import { BookOpen, FileText, Calendar, Clock, CheckCircle, Download, Video, TrendingUp, Award } from "lucide-react"
+import {
+  BookOpen,
+  FileText,
+  Calendar,
+  Clock,
+  CheckCircle,
+  Download,
+  Video,
+  TrendingUp,
+  Award,
+  ExternalLink,
+} from "lucide-react"
 
 // Helper to format dates from Firestore Timestamp or native Date
 const formatDate = (d: Timestamp | Date): string => {
+  if (!d) return "N/A"
   const dateObj = (d as any)?.toDate ? (d as any).toDate() : (d as Date)
   return dateObj.toLocaleDateString()
 }
 
 const formatDateTime = (d: Timestamp | Date): string => {
+  if (!d) return "N/A"
   const dateObj = (d as any)?.toDate ? (d as any).toDate() : (d as Date)
   return dateObj.toLocaleString()
 }
@@ -42,6 +56,8 @@ export default function StudentClassroomPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [content, setContent] = useState<Content[]>([])
   const [loading, setLoading] = useState(true)
+  const [showPdfViewer, setShowPdfViewer] = useState(false)
+  const [selectedPdf, setSelectedPdf] = useState<{ url: string; title: string } | null>(null)
 
   // Submission states
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null)
@@ -96,6 +112,7 @@ export default function StudentClassroomPage() {
     try {
       const submissionData = {
         studentId: userProfile.uid,
+        studentName: userProfile.displayName,
         submittedAt: new Date(),
         status: "submitted" as const,
         content: submissionText,
@@ -103,7 +120,7 @@ export default function StudentClassroomPage() {
       }
 
       await updateDoc(doc(db, "assignments", selectedAssignment.id), {
-        [`submissions.${userProfile.uid}`]: submissionData,
+        [`submissions.${userProfile?.uid || "uid"}`]: submissionData,
       })
 
       setSubmissionText("")
@@ -125,18 +142,23 @@ export default function StudentClassroomPage() {
     }
   }
 
-  const handleSubmissionUpload = (url: string, filename: string) => {
+  const handleSubmissionUpload = (url: string, filename: string, key: string) => {
     setSubmissionFile({ url, filename })
     toast({
       title: "File Uploaded",
-      description: `${filename} uploaded successfully to Cloudinary`,
+      description: `${filename} uploaded successfully to UploadThing`,
     })
+  }
+
+  const openPdfViewer = (url: string, title: string) => {
+    setSelectedPdf({ url, title })
+    setShowPdfViewer(true)
   }
 
   if (loading) {
     return (
       <SidebarLayout role="student">
-        <div className="p-6 flex items-center justify-center">
+        <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
             <p className="mt-2 text-gray-500">Loading classroom...</p>
@@ -149,166 +171,181 @@ export default function StudentClassroomPage() {
   if (!classroom) {
     return (
       <SidebarLayout role="student">
-        <div className="p-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Classroom Not Found</h1>
-          <p className="text-gray-600">The classroom you're looking for doesn't exist.</p>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900">Classroom Not Found</h1>
+            <p className="text-gray-600">The classroom you're looking for doesn't exist.</p>
+          </div>
         </div>
       </SidebarLayout>
     )
   }
 
-  // Calculate student progress
-  const userSubmissions = assignments.filter((a) => a.submissions?.[userProfile?.uid || ""])
-  const completedAssignments = userSubmissions.filter((a) => a.submissions[userProfile?.uid || ""].status === "graded")
-  const pendingAssignments = assignments.filter((a) => !a.submissions?.[userProfile?.uid || ""])
-  const overdueAssignments = pendingAssignments.filter((a) => {
-    const dueDate = a.dueDate?.toDate?.() || new Date(a.dueDate)
-    return dueDate < new Date()
-  })
-
-  const grades = completedAssignments
-    .map((a) => a.submissions[userProfile?.uid || ""].grade)
-    .filter((grade) => grade !== undefined) as number[]
-  const averageGrade = grades.length > 0 ? grades.reduce((sum, grade) => sum + grade, 0) / grades.length : 0
+  const completedAssignments = assignments.filter(
+    (assignment) => assignment.submissions?.[userProfile?.uid || "uid"]?.status === "submitted",
+  )
+  const pendingAssignments = assignments.filter((assignment) => !assignment.submissions?.[userProfile?.uid || "uid"])
+  const overdueAssignments = pendingAssignments.filter(
+    (assignment) => new Date(assignment.dueDate.toDate ? assignment.dueDate.toDate() : assignment.dueDate) < new Date(),
+  )
 
   return (
     <SidebarLayout role="student">
-      <div className="p-6">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{classroom.name}</h1>
-              <p className="text-gray-600">
-                {classroom.subject} • {classroom.teacherName}
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              {classroom.meetLink && (
-                <Button asChild>
-                  <a href={classroom.meetLink} target="_blank" rel="noopener noreferrer">
-                    <Video className="h-4 w-4 mr-2" />
-                    Join Class
-                  </a>
-                </Button>
-              )}
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">{classroom.name}</h1>
+                <p className="text-gray-600 mt-1">
+                  {classroom.subject} • {classroom.students.length} students
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline">
+                  {completedAssignments.length}/{assignments.length} assignments completed
+                </Badge>
+              </div>
             </div>
           </div>
-        </div>
 
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="assignments">Assignments</TabsTrigger>
-            <TabsTrigger value="content">Resources</TabsTrigger>
-            <TabsTrigger value="grades">Grades</TabsTrigger>
-          </TabsList>
+          <Tabs defaultValue="overview" className="space-y-8">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="assignments">Assignments</TabsTrigger>
+              <TabsTrigger value="content">Resources</TabsTrigger>
+              <TabsTrigger value="progress">Progress</TabsTrigger>
+            </TabsList>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Assignments</CardTitle>
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{assignments.length}</div>
-                  <p className="text-xs text-muted-foreground">In this class</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Completed</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-green-600">{completedAssignments.length}</div>
-                  <p className="text-xs text-muted-foreground">Assignments done</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-blue-600">{pendingAssignments.length}</div>
-                  <p className="text-xs text-muted-foreground">To complete</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Average Grade</CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{averageGrade > 0 ? Math.round(averageGrade) : "--"}%</div>
-                  <p className="text-xs text-muted-foreground">Overall performance</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Progress Overview */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Progress</CardTitle>
-                <CardDescription>Track your completion and performance</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium">Assignment Completion</span>
-                    <span className="text-sm text-gray-600">
-                      {assignments.length > 0
-                        ? Math.round((completedAssignments.length / assignments.length) * 100)
-                        : 0}
-                      %
-                    </span>
-                  </div>
-                  <Progress
-                    value={assignments.length > 0 ? (completedAssignments.length / assignments.length) * 100 : 0}
-                  />
-                </div>
-
-                {overdueAssignments.length > 0 && (
-                  <div className="p-4 bg-red-50 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-5 w-5 text-red-600" />
-                      <span className="font-medium text-red-800">
-                        {overdueAssignments.length} overdue assignment{overdueAssignments.length > 1 ? "s" : ""}
-                      </span>
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center text-lg">
+                      <BookOpen className="h-5 w-5 mr-2" />
+                      Classroom Info
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Description</Label>
+                      <p className="text-sm text-gray-600 mt-1">{classroom.description || "No description provided"}</p>
                     </div>
-                    <p className="text-sm text-red-600 mt-1">Please complete these assignments as soon as possible.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Schedule</Label>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {classroom.schedule.days.join(", ")} at {classroom.schedule.time || "No time set"}
+                      </p>
+                    </div>
+                    {classroom.curriculumUrl && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-700">Curriculum</Label>
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 bg-transparent"
+                            onClick={() => classroom.curriculumUrl && openPdfViewer(classroom.curriculumUrl, "Classroom Curriculum")}
+                          >
+                            <FileText className="h-3 w-3 mr-2" />
+                            View PDF
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1 bg-transparent" asChild>
+                            <a href={classroom.curriculumUrl} target="_blank" rel="noopener noreferrer" download>
+                              <Download className="h-3 w-3 mr-2" />
+                              Download
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-            {/* Upcoming Assignments */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Upcoming Assignments</CardTitle>
-                <CardDescription>Assignments due soon</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {pendingAssignments
-                    .sort((a, b) => {
-                      const dateA = a.dueDate?.toDate?.() || new Date(a.dueDate)
-                      const dateB = b.dueDate?.toDate?.() || new Date(b.dueDate)
-                      return dateA.getTime() - dateB.getTime()
-                    })
-                    .slice(0, 5)
-                    .map((assignment) => {
-                      const dueDate = assignment.dueDate?.toDate?.() || new Date(assignment.dueDate)
+                {/* Google Meet Section */}
+                {classroom.meetLink && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center text-lg">
+                        <Video className="h-5 w-5 mr-2" />
+                        Google Meet
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-center space-y-3">
+                        <p className="text-sm text-gray-600">Join the class meeting</p>
+                        <Button className="w-full" asChild>
+                          <a href={classroom.meetLink} target="_blank" rel="noopener noreferrer">
+                            <Video className="h-4 w-4 mr-2" />
+                            Join Class Meeting
+                          </a>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center text-lg">
+                      <TrendingUp className="h-5 w-5 mr-2" />
+                      Your Progress
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <Label className="text-sm font-medium text-gray-700">Assignment Progress</Label>
+                        <span className="text-sm text-gray-600">
+                          {Math.round((completedAssignments.length / Math.max(assignments.length, 1)) * 100)}%
+                        </span>
+                      </div>
+                      <Progress
+                        value={(completedAssignments.length / Math.max(assignments.length, 1)) * 100}
+                        className="h-2"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <p className="text-2xl font-bold text-green-600">{completedAssignments.length}</p>
+                        <p className="text-xs text-gray-600">Completed</p>
+                      </div>
+                      <div className="text-center p-3 bg-orange-50 rounded-lg">
+                        <p className="text-2xl font-bold text-orange-600">{pendingAssignments.length}</p>
+                        <p className="text-xs text-gray-600">Pending</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Upcoming Assignments */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center text-lg">
+                    <Calendar className="h-5 w-5 mr-2" />
+                    Upcoming Assignments
+                  </CardTitle>
+                  <CardDescription>Assignments due soon</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {pendingAssignments.slice(0, 5).map((assignment) => {
+                      const dueDate = assignment.dueDate.toDate
+                        ? assignment.dueDate.toDate()
+                        : new Date(assignment.dueDate)
                       const isOverdue = dueDate < new Date()
+                      const daysUntilDue = Math.ceil((dueDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
 
                       return (
-                        <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div
+                          key={assignment.id}
+                          className={`flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors ${
+                            isOverdue ? "border-red-200 bg-red-50" : ""
+                          }`}
+                        >
                           <div className="flex items-center space-x-3">
                             <div
                               className={`h-10 w-10 rounded-lg flex items-center justify-center ${
@@ -319,312 +356,444 @@ export default function StudentClassroomPage() {
                             </div>
                             <div>
                               <h3 className="font-medium">{assignment.title}</h3>
-                              <p className="text-sm text-gray-500">Due: {formatDateTime(assignment.dueDate)}</p>
+                              <p className="text-sm text-gray-500">
+                                Due: {formatDateTime(assignment.dueDate)}
+                                {isOverdue
+                                  ? " (Overdue)"
+                                  : daysUntilDue === 0
+                                    ? " (Due today)"
+                                    : ` (${daysUntilDue} days)`}
+                              </p>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            {isOverdue && <Badge variant="destructive">Overdue</Badge>}
-                            <Badge variant="outline">{assignment.totalPoints} pts</Badge>
-                            <Button size="sm" onClick={() => setSelectedAssignment(assignment)}>
+                            <Badge variant={isOverdue ? "destructive" : "secondary"}>
+                              {assignment.totalPoints} points
+                            </Badge>
+                            <Button size="sm" variant="outline" onClick={() => setSelectedAssignment(assignment)}>
                               Submit
                             </Button>
                           </div>
                         </div>
                       )
                     })}
+                    {pendingAssignments.length === 0 && (
+                      <div className="text-center py-12">
+                        <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-4" />
+                        <p className="text-gray-500">All assignments completed!</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
 
-                  {pendingAssignments.length === 0 && (
-                    <div className="text-center py-8">
-                      <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-4" />
-                      <p className="text-gray-500">All assignments completed! Great work!</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Assignments Tab */}
-          <TabsContent value="assignments" className="space-y-6">
-            <div className="space-y-4">
-              {assignments.map((assignment) => {
-                const userSubmission = assignment.submissions?.[userProfile?.uid || ""]
-                const dueDate = assignment.dueDate?.toDate?.() || new Date(assignment.dueDate)
-                const isOverdue = dueDate < new Date() && !userSubmission
-
-                return (
-                  <Card key={assignment.id}>
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
+              {/* Recent Resources */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center text-lg">
+                    <BookOpen className="h-5 w-5 mr-2" />
+                    Recent Resources
+                  </CardTitle>
+                  <CardDescription>Latest learning materials</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {content.slice(0, 4).map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                          {item.type === "pdf" && <FileText className="h-5 w-5 text-green-600" />}
+                          {item.type === "image" && <BookOpen className="h-5 w-5 text-green-600" />}
+                          {item.type === "video" && <Video className="h-5 w-5 text-green-600" />}
+                          {item.type === "link" && <ExternalLink className="h-5 w-5 text-green-600" />}
+                        </div>
                         <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <h4 className="font-medium text-lg">{assignment.title}</h4>
-                            <Badge variant="outline">{assignment.totalPoints} points</Badge>
-                            {userSubmission && (
-                              <Badge
-                                variant={
-                                  userSubmission.status === "graded"
-                                    ? "default"
-                                    : userSubmission.status === "submitted"
-                                      ? "secondary"
-                                      : "outline"
-                                }
-                              >
-                                {userSubmission.status === "graded"
-                                  ? "Graded"
-                                  : userSubmission.status === "submitted"
-                                    ? "Submitted"
-                                    : "Draft"}
-                              </Badge>
-                            )}
-                            {isOverdue && <Badge variant="destructive">Overdue</Badge>}
-                          </div>
-                          <p className="text-gray-600 mb-3">{assignment.description}</p>
-                          <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-1" />
-                              Due: {formatDateTime(assignment.dueDate)}
-                            </span>
-                            {userSubmission?.grade !== undefined && (
-                              <span className="flex items-center">
-                                <Award className="h-4 w-4 mr-1" />
-                                Grade: {userSubmission.grade}/{assignment.totalPoints}
-                              </span>
-                            )}
-                          </div>
+                          <h4 className="font-medium text-sm">{item.title}</h4>
+                          <p className="text-xs text-gray-500">{item.topic}</p>
                         </div>
-                        <div className="flex space-x-2">
-                          {assignment.attachments && assignment.attachments.length > 0 && (
-                            <Button size="sm" variant="outline" asChild>
-                              <a href={assignment.attachments[0]} target="_blank" rel="noopener noreferrer">
-                                <Download className="h-4 w-4 mr-1" />
-                                Download
-                              </a>
-                            </Button>
-                          )}
-                          {!userSubmission && (
-                            <Button size="sm" onClick={() => setSelectedAssignment(assignment)}>
-                              Submit
-                            </Button>
-                          )}
-                          {userSubmission && userSubmission.status !== "graded" && (
-                            <Button size="sm" variant="outline" onClick={() => setSelectedAssignment(assignment)}>
-                              Edit Submission
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-
-                      {userSubmission && (
-                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                          <h5 className="font-medium mb-2">Your Submission</h5>
-                          <p className="text-sm text-gray-600 mb-2">{userSubmission.content}</p>
-                          <p className="text-xs text-gray-500">
-                            Submitted: {formatDateTime(userSubmission.submittedAt)}
-                          </p>
-                          {userSubmission.attachments && userSubmission.attachments.length > 0 && (
-                            <div className="mt-2">
-                              <Button size="sm" variant="outline" asChild>
-                                <a href={userSubmission.attachments[0]} target="_blank" rel="noopener noreferrer">
-                                  <Download className="h-3 w-3 mr-1" />
-                                  View Attachment
-                                </a>
-                              </Button>
-                            </div>
-                          )}
-                          {userSubmission.feedback && (
-                            <div className="mt-2 p-2 bg-blue-50 rounded">
-                              <p className="text-sm font-medium text-blue-800">Teacher Feedback:</p>
-                              <p className="text-sm text-blue-700">{userSubmission.feedback}</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )
-              })}
-
-              {assignments.length === 0 && (
-                <div className="text-center py-12">
-                  <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments yet</h3>
-                  <p className="text-gray-500">Your teacher hasn't posted any assignments yet.</p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* Content Tab */}
-          <TabsContent value="content" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {content.map((item) => (
-                <Card key={item.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start space-x-3">
-                      <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                        {item.type === "pdf" && <FileText className="h-5 w-5 text-green-600" />}
-                        {item.type === "image" && <BookOpen className="h-5 w-5 text-green-600" />}
-                        {item.type === "video" && <Video className="h-5 w-5 text-green-600" />}
-                        {item.type === "link" && <BookOpen className="h-5 w-5 text-green-600" />}
-                      </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium">{item.title}</h4>
-                        <p className="text-sm text-gray-500">{item.topic}</p>
-                        <p className="text-xs text-gray-400 mt-1">{formatDate(item.uploadedAt)}</p>
-                        {CloudinaryService.isImageFile(item.url) && (
-                          <img
-                            src={
-                              CloudinaryService.getOptimizedUrl(item.url, {
-                                width: 200,
-                                height: 150 || "/placeholder.svg",
-                              }) || "/placeholder.svg"
-                            }
-                            alt={item.title}
-                            className="mt-2 rounded border max-w-full h-auto"
-                          />
-                        )}
-                        <Button size="sm" className="mt-2" asChild>
+                        <Button size="sm" variant="outline" asChild>
                           <a href={item.url} target="_blank" rel="noopener noreferrer">
-                            <Download className="h-3 w-3 mr-1" />
-                            {item.type === "link" ? "Visit" : "Download"}
+                            View
                           </a>
                         </Button>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    ))}
+                    {content.length === 0 && (
+                      <div className="col-span-full text-center py-8">
+                        <BookOpen className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500 text-sm">No resources available yet</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-              {content.length === 0 && (
-                <div className="col-span-full text-center py-12">
-                  <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No resources yet</h3>
-                  <p className="text-gray-500">Your teacher hasn't uploaded any learning materials yet.</p>
+            {/* Assignments Tab */}
+            <TabsContent value="assignments" className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h3 className="text-xl font-semibold">Assignments</h3>
+                <div className="flex gap-2">
+                  <Badge variant="outline">{completedAssignments.length} completed</Badge>
+                  <Badge variant="outline">{pendingAssignments.length} pending</Badge>
+                  {overdueAssignments.length > 0 && (
+                    <Badge variant="destructive">{overdueAssignments.length} overdue</Badge>
+                  )}
                 </div>
-              )}
-            </div>
-          </TabsContent>
+              </div>
 
-          {/* Grades Tab */}
-          <TabsContent value="grades" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Grade Summary</CardTitle>
-                <CardDescription>Your performance overview</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="text-center p-4 border rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">{completedAssignments.length}</div>
-                    <p className="text-sm text-gray-500">Graded Assignments</p>
-                  </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {averageGrade > 0 ? Math.round(averageGrade) : "--"}%
-                    </div>
-                    <p className="text-sm text-gray-500">Average Grade</p>
-                  </div>
-                  <div className="text-center p-4 border rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">
-                      {grades.reduce((sum, grade) => sum + grade, 0)}
-                    </div>
-                    <p className="text-sm text-gray-500">Total Points Earned</p>
-                  </div>
-                </div>
+              <div className="space-y-6">
+                {assignments.map((assignment) => {
+                  const submission = assignment.submissions?.[userProfile?.uid || "uid"]
+                  const dueDate = assignment.dueDate.toDate ? assignment.dueDate.toDate() : new Date(assignment.dueDate)
+                  const isOverdue = dueDate < new Date() && !submission
+                  const isSubmitted = submission?.status === "submitted"
 
-                <div className="space-y-4">
-                  {completedAssignments.map((assignment) => {
-                    const submission = assignment.submissions[userProfile?.uid || ""]
-                    const percentage = ((submission.grade || 0) / assignment.totalPoints) * 100
-
-                    return (
-                      <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h4 className="font-medium">{assignment.title}</h4>
-                          <p className="text-sm text-gray-500">Submitted: {formatDate(submission.submittedAt)}</p>
+                  return (
+                    <Card
+                      key={assignment.id}
+                      className={`hover:shadow-md transition-shadow ${
+                        isOverdue ? "border-red-200" : isSubmitted ? "border-green-200" : ""
+                      }`}
+                    >
+                      <CardContent className="p-6">
+                        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
+                              <h4 className="font-medium text-xl">{assignment.title}</h4>
+                              <Badge variant="outline">{assignment.totalPoints} points</Badge>
+                              {isSubmitted && <Badge className="bg-green-100 text-green-800">Submitted</Badge>}
+                              {isOverdue && <Badge variant="destructive">Overdue</Badge>}
+                            </div>
+                            <p className="text-gray-600 mb-4">{assignment.description}</p>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-4">
+                              <span className="flex items-center">
+                                <Calendar className="h-4 w-4 mr-1" />
+                                Due: {formatDateTime(assignment.dueDate)}
+                              </span>
+                              {submission && (
+                                <span className="flex items-center">
+                                  <Clock className="h-4 w-4 mr-1" />
+                                  Submitted: {formatDateTime(submission.submittedAt)}
+                                </span>
+                              )}
+                            </div>
+                            {assignment.attachments && assignment.attachments.length > 0 && (
+                              <div className="mb-4">
+                                {UploadThingService.isPdfFile(assignment.attachments[0]) ? (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        openPdfViewer(assignment.attachments[0], `${assignment.title} - Attachment`)
+                                      }
+                                    >
+                                      <FileText className="h-3 w-3 mr-1" />
+                                      Preview PDF
+                                    </Button>
+                                    <Button size="sm" variant="outline" asChild>
+                                      <a href={assignment.attachments[0]} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-3 w-3 mr-1" />
+                                        Open in New Tab
+                                      </a>
+                                    </Button>
+                                    <Button size="sm" variant="outline" asChild>
+                                      <a
+                                        href={assignment.attachments[0]}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        download
+                                      >
+                                        <Download className="h-3 w-3 mr-1" />
+                                        Download
+                                      </a>
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button size="sm" variant="outline" asChild>
+                                    <a href={assignment.attachments[0]} target="_blank" rel="noopener noreferrer">
+                                      <Download className="h-3 w-3 mr-1" />
+                                      View Attachment
+                                    </a>
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                            {submission && (
+                              <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                                <h5 className="font-medium text-green-800 mb-2">Your Submission</h5>
+                                <p className="text-sm text-green-700 mb-2">{submission.content}</p>
+                                {submission.attachments && submission.attachments.length > 0 && (
+                                  <Button size="sm" variant="outline" asChild>
+                                    <a href={submission.attachments[0]} target="_blank" rel="noopener noreferrer">
+                                      <Download className="h-3 w-3 mr-1" />
+                                      View Submission
+                                    </a>
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            {!isSubmitted && (
+                              <Button
+                                size="sm"
+                                onClick={() => setSelectedAssignment(assignment)}
+                                className={isOverdue ? "bg-red-600 hover:bg-red-700" : ""}
+                              >
+                                Submit Assignment
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold">
-                            {submission.grade}/{assignment.totalPoints}
-                          </div>
-                          <div
-                            className={`text-sm ${
-                              percentage >= 90
-                                ? "text-green-600"
-                                : percentage >= 80
-                                  ? "text-blue-600"
-                                  : percentage >= 70
-                                    ? "text-yellow-600"
-                                    : "text-red-600"
-                            }`}
-                          >
-                            {Math.round(percentage)}%
-                          </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+
+                {assignments.length === 0 && (
+                  <div className="text-center py-16">
+                    <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments yet</h3>
+                    <p className="text-gray-500">Your teacher hasn't posted any assignments yet</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Content Tab */}
+            <TabsContent value="content" className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h3 className="text-xl font-semibold">Learning Resources</h3>
+                <Badge variant="outline">{content.length} resources available</Badge>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {content.map((item) => (
+                  <Card key={item.id} className="hover:shadow-md transition-shadow">
+                    <CardContent className="p-6">
+                      <div className="flex items-start space-x-3 mb-4">
+                        <div className="h-12 w-12 rounded-lg bg-green-100 flex items-center justify-center">
+                          {item.type === "pdf" && <FileText className="h-6 w-6 text-green-600" />}
+                          {item.type === "image" && <BookOpen className="h-6 w-6 text-green-600" />}
+                          {item.type === "video" && <Video className="h-6 w-6 text-green-600" />}
+                          {item.type === "link" && <ExternalLink className="h-6 w-6 text-green-600" />}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-lg">{item.title}</h4>
+                          <p className="text-sm text-gray-500">{item.topic}</p>
+                          <p className="text-xs text-gray-400 mt-1">{formatDate(item.uploadedAt)}</p>
                         </div>
                       </div>
-                    )
-                  })}
 
-                  {completedAssignments.length === 0 && (
-                    <div className="text-center py-8">
-                      <Award className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <p className="text-gray-500">No grades yet</p>
-                      <p className="text-sm text-gray-400">Complete assignments to see your grades here</p>
+                      {UploadThingService.isImageFile(item.url) && (
+                        <img
+                          src={item.url || "/placeholder.svg"}
+                          alt={item.title}
+                          className="w-full h-32 object-cover rounded-lg mb-4"
+                        />
+                      )}
+
+                      {UploadThingService.isPdfFile(item.url) && (
+                        <div className="mb-4 p-4 border rounded-lg bg-gray-50 flex items-center justify-between">
+                          <div className="flex items-center">
+                            <FileText className="h-5 w-5 text-red-500 mr-2" />
+                            <span className="text-sm font-medium">PDF Document</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => openPdfViewer(item.url, item.title)}>
+                              <FileText className="h-3 w-3 mr-1" />
+                              View PDF
+                            </Button>
+                            <Button size="sm" variant="outline" asChild>
+                              <a href={item.url} target="_blank" rel="noopener noreferrer" download>
+                                <Download className="h-3 w-3 mr-1" />
+                                Download
+                              </a>
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex gap-2">
+                        <Button size="sm" className="flex-1" asChild>
+                          <a href={item.url} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-3 w-3 mr-2" />
+                            {item.type === "link" ? "Visit Link" : "Download"}
+                          </a>
+                        </Button>
+                        {UploadThingService.isPdfFile(item.url) && (
+                          <Button size="sm" variant="outline" onClick={() => openPdfViewer(item.url, item.title)}>
+                            <FileText className="h-3 w-3 mr-1" />
+                            View PDF
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {content.length === 0 && (
+                  <div className="col-span-full text-center py-16">
+                    <BookOpen className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No resources yet</h3>
+                    <p className="text-gray-500">Your teacher hasn't uploaded any learning materials yet</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+
+            {/* Progress Tab */}
+            <TabsContent value="progress" className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center text-lg">
+                      <Award className="h-5 w-5 mr-2" />
+                      Completion Rate
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <div className="text-4xl font-bold text-blue-600 mb-2">
+                      {Math.round((completedAssignments.length / Math.max(assignments.length, 1)) * 100)}%
+                    </div>
+                    <p className="text-sm text-gray-500">Assignments completed</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center text-lg">
+                      <CheckCircle className="h-5 w-5 mr-2" />
+                      Completed
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <div className="text-4xl font-bold text-green-600 mb-2">{completedAssignments.length}</div>
+                    <p className="text-sm text-gray-500">Assignments done</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center text-lg">
+                      <Clock className="h-5 w-5 mr-2" />
+                      Pending
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <div className="text-4xl font-bold text-orange-600 mb-2">{pendingAssignments.length}</div>
+                    <p className="text-sm text-gray-500">Still to do</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Assignment History */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Assignment History</CardTitle>
+                  <CardDescription>Your completed assignments</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {completedAssignments.map((assignment) => {
+                      const submission = assignment.submissions?.[userProfile?.uid || "uid"]
+                      return (
+                        <div
+                          key={assignment.id}
+                          className="flex items-center justify-between p-4 border rounded-lg bg-green-50 border-green-200"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            </div>
+                            <div>
+                              <h3 className="font-medium">{assignment.title}</h3>
+                              <p className="text-sm text-gray-500">
+                                Submitted: {formatDateTime(submission?.submittedAt)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge className="bg-green-100 text-green-800">Completed</Badge>
+                            <Badge variant="outline">{assignment.totalPoints} points</Badge>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {completedAssignments.length === 0 && (
+                      <div className="text-center py-12">
+                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">No completed assignments yet</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {/* PDF Viewer Dialog */}
+          <Dialog open={showPdfViewer} onOpenChange={setShowPdfViewer}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{selectedPdf?.title || "PDF Viewer"}</DialogTitle>
+                <DialogDescription>View the document</DialogDescription>
+              </DialogHeader>
+              {selectedPdf && <UploadThingPDFViewer url={selectedPdf.url} title={selectedPdf.title} />}
+            </DialogContent>
+          </Dialog>
+
+          {/* Assignment Submission Dialog */}
+          <Dialog open={!!selectedAssignment} onOpenChange={() => setSelectedAssignment(null)}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Submit Assignment</DialogTitle>
+                <DialogDescription>
+                  {selectedAssignment?.title} - Due: {selectedAssignment && formatDateTime(selectedAssignment.dueDate)}
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmitAssignment} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="submissionText">Your Response</Label>
+                  <Textarea
+                    id="submissionText"
+                    value={submissionText}
+                    onChange={(e) => setSubmissionText(e.target.value)}
+                    placeholder="Enter your assignment response here..."
+                    rows={6}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Attachment (Optional)</Label>
+                  <UploadThingFileUpload
+                    onUploadComplete={handleSubmissionUpload}
+                    acceptedTypes={["application/pdf", ".doc", ".docx", ".txt", "image/*"]}
+                    maxSizeMB={10}
+                    disabled={submitting}
+                  />
+                  {submissionFile && (
+                    <div className="text-sm text-green-600 bg-green-50 p-3 rounded-lg border border-green-200">
+                      ✓ {submissionFile.filename} uploaded successfully
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* Assignment Submission Dialog */}
-        <Dialog open={!!selectedAssignment} onOpenChange={() => setSelectedAssignment(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Submit Assignment: {selectedAssignment?.title}</DialogTitle>
-              <DialogDescription>Complete your assignment submission below</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmitAssignment} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="submission">Your Response</Label>
-                <Textarea
-                  id="submission"
-                  value={submissionText}
-                  onChange={(e) => setSubmissionText(e.target.value)}
-                  placeholder="Type your assignment response here..."
-                  rows={6}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Attachment (Optional)</Label>
-                <FileUpload
-                  onUploadComplete={(url, filename, publicId) => {
-                    setSubmissionFile({ url, filename })
-                  }}
-                  acceptedTypes={["application/pdf", ".doc", ".docx", ".txt", "image/*"]}
-                  maxSizeMB={10}
-                  disabled={submitting}
-                />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSelectedAssignment(null)}
-                  disabled={submitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "Submitting..." : "Submit Assignment"}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <div className="flex justify-end space-x-3 pt-4">
+                  <Button type="button" variant="outline" onClick={() => setSelectedAssignment(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? "Submitting..." : "Submit Assignment"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
     </SidebarLayout>
   )
