@@ -52,6 +52,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 import { UploadThingPDFViewer } from "@/components/ui/uploadthing-pdf-viewer"
 import { VisualAidGenerator } from "@/components/ui/visual-aid-generator"
+import ClassroomPlanningAgent from "@/components/agents/classroom-planning-agent"
 
 // Helper to format dates from Firestore Timestamp or native Date
 const formatDate = (d: Timestamp | Date): string => {
@@ -736,18 +737,21 @@ export default function TeacherClassroomPage() {
                               {Object.keys(assignment.submissions || {}).length} submissions
                             </span>
                           </div>
-                          {assignment.attachments && assignment.attachments.length > 0 && (
+                          {assignment.attachments && assignment.attachments.length > 0 && assignment.attachments[0] && (
                             <div className="mt-4">
-                              {UploadThingService.isPdfFile(assignment.attachments[0]) ? (
+                              {UploadThingService.isPdfFile(assignment.attachments[0] as string) ? (
                                 <div className="flex gap-2">
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() =>
-                                      openPdfViewer(assignment.attachments[0], `${assignment.title} - Attachment`)
-                                    }
+                                    onClick={() => {
+                                      if (assignment.attachments[0]) {
+                                        openPdfViewer(assignment.attachments[0], `${assignment.title} - Attachment`);
+                                      }
+                                    }}
                                   >
                                     <FileText className="h-3 w-3 mr-2" />
+                                    Preview PDF
                                     Preview PDF
                                   </Button>
                                   <Button size="sm" variant="outline" asChild>
@@ -1094,25 +1098,7 @@ export default function TeacherClassroomPage() {
           </Dialog>
 
           {/* AI Planning Dialog */}
-          <Dialog open={showAIPlanning} onOpenChange={setShowAIPlanning}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>AI Lesson Planner</DialogTitle>
-                <DialogDescription>Generate lesson plans and teaching strategies with AI</DialogDescription>
-              </DialogHeader>
-              <div className="text-center py-12">
-                <Target className="h-16 w-16 text-blue-600 mx-auto mb-4" />
-                <h3 className="text-xl font-medium mb-4">AI Lesson Planning</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  This feature will help you create comprehensive lesson plans, suggest teaching strategies, and
-                  generate curriculum content.
-                </p>
-                <Badge variant="secondary" className="text-sm">
-                  Coming Soon
-                </Badge>
-              </div>
-            </DialogContent>
-          </Dialog>
+              <ClassroomPlanningAgent showAIPlanning={showAIPlanning} setShowAIPlanning={setShowAIPlanning} classroomId={classroomId} />
 
           {/* AI Worksheet Generator Dialog */}
           <Dialog open={showWorksheetGenerator} onOpenChange={setShowWorksheetGenerator}>

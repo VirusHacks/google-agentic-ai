@@ -1,27 +1,50 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "target": "ES6",
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
+    /* Language & Module Settings */
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "allowJs": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
     "incremental": true,
+    "noEmit": true,
+    "moduleDetection": "force",
+
+    /* Type Checking */
+    "strict": true,
+    "skipLibCheck": true,
+    "checkJs": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitAny": false,
+
+    /* Plugins */
     "plugins": [
       {
         "name": "next"
       }
     ],
+
+    /* Aliases */
+    "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    ".eslintrc.cjs",
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js",
+    "**/*.cjs",
+    ".next/types/**/*.ts",
+    ".next-dev/types/**/*.ts",
+    "src/ai/open-canvas/nodes/rewrite-artifact/index.tsx",
+    "src/components/notebook/mindmap/types.tss"
+  ],
   "exclude": ["node_modules"]
 }
