@@ -29,7 +29,6 @@ import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UploadThingFileUpload } from "@/components/ui/uploadthing-file-upload"
-import { StudentCard } from "@/components/ui/student-card"
 import { UploadThingService } from "@/lib/uploadthing-service"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -48,15 +47,52 @@ import {
   Video,
   ExternalLink,
   Brain,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  BarChart3,
+  PieChart,
+  Activity,
+  GraduationCap,
+  Zap,
+  Eye,
+  X,
 } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+} from "recharts"
 import { UploadThingPDFViewer } from "@/components/ui/uploadthing-pdf-viewer"
 import { VisualAidGenerator } from "@/components/ui/visual-aid-generator"
+import { AssignmentsTab } from "@/components/assignments-tab"
+import { ContentTab } from "@/components/content/content-tab"
+import ClassroomPlanningAgent from "@/components/agents/classroom-planning-agent"
 
 // Helper to format dates from Firestore Timestamp or native Date
 const formatDate = (d: Timestamp | Date): string => {
   const dateObj = (d as any)?.toDate ? (d as any).toDate() : (d as Date)
-  return dateObj.toLocaleDateString()
+  return dateObj.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+const formatTime = (d: Timestamp | Date): string => {
+  const dateObj = (d as any)?.toDate ? (d as any).toDate() : (d as Date)
+  return dateObj.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  })
 }
 
 export default function TeacherClassroomPage() {
@@ -184,7 +220,7 @@ export default function TeacherClassroomPage() {
     }
   }
 
-  const handleAddContent = async (e: React.FormEvent) => {
+  const  handleAddContent = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userProfile || !classroom) return
 
@@ -305,7 +341,7 @@ export default function TeacherClassroomPage() {
     }))
 
     const gradeDistribution = [
-      { grade: "A", count: Math.floor(Math.random() * 10) + 5, color: "#22c55e" },
+      { grade: "A", count: Math.floor(Math.random() * 10) + 5, color: "#10b981" },
       { grade: "B", count: Math.floor(Math.random() * 15) + 8, color: "#3b82f6" },
       { grade: "C", count: Math.floor(Math.random() * 12) + 6, color: "#f59e0b" },
       { grade: "D", count: Math.floor(Math.random() * 8) + 3, color: "#ef4444" },
@@ -318,10 +354,10 @@ export default function TeacherClassroomPage() {
   if (loading) {
     return (
       <SidebarLayout role="teacher">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-gray-500">Loading classroom...</p>
+        <div className="flex items-center justify-center min-h-screen bg-slate-50">
+          <div className="text-center space-y-4">
+            <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin mx-auto"></div>
+            <p className="text-slate-600 font-medium">Loading classroom...</p>
           </div>
         </div>
       </SidebarLayout>
@@ -331,10 +367,11 @@ export default function TeacherClassroomPage() {
   if (!classroom) {
     return (
       <SidebarLayout role="teacher">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-gray-900">Classroom Not Found</h1>
-            <p className="text-gray-600">The classroom you're looking for doesn't exist.</p>
+        <div className="flex items-center justify-center min-h-screen bg-slate-50">
+          <div className="text-center space-y-4">
+            <AlertCircle className="w-16 h-16 text-slate-400 mx-auto" />
+            <h1 className="text-2xl font-semibold text-slate-900">Classroom Not Found</h1>
+            <p className="text-slate-600">The classroom you're looking for doesn't exist.</p>
           </div>
         </div>
       </SidebarLayout>
@@ -346,608 +383,701 @@ export default function TeacherClassroomPage() {
 
   return (
     <SidebarLayout role="teacher">
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="min-h-screen bg-slate-50">
+        <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">{classroom.name}</h1>
-                <p className="text-gray-600 mt-1">
-                  {classroom.subject} • {classroom.students.length} students
-                </p>
+          <div className="bg-white border-b border-slate-200 px-6 py-8">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{classroom.name}</h1>
+                <div className="flex items-center gap-4 text-slate-600">
+                  <span className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4" />
+                    {classroom.subject}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    {classroom.students.length} students
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4" />
+                    {classroom.gradeRange}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="outline" className="cursor-pointer hover:bg-gray-50" onClick={copyInviteCode}>
-                  <Copy className="h-3 w-3 mr-1" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={copyInviteCode}
+                  className="font-mono text-xs bg-slate-50 hover:bg-slate-100 border-slate-300"
+                >
+                  <Copy className="w-3 h-3 mr-2" />
                   {classroom.inviteCode}
-                </Badge>
-                <Button onClick={() => setShowAIPlanning(true)}>
-                  <Target className="h-4 w-4 mr-2" />
+                </Button>
+                <Button onClick={() => setShowAIPlanning(true)} className="bg-slate-900 hover:bg-slate-800 text-white">
+                  <Brain className="w-4 h-4 mr-2" />
                   AI Planning
                 </Button>
               </div>
             </div>
           </div>
 
-          <Tabs defaultValue="overview" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="people">People</TabsTrigger>
-              <TabsTrigger value="content">Content</TabsTrigger>
-              <TabsTrigger value="assignments">Assignments</TabsTrigger>
-              <TabsTrigger value="visual-aids">Visual Aids</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            </TabsList>
+          {/* Navigation Tabs */}
+          <div className="bg-white border-b border-slate-200 px-6">
+            <Tabs defaultValue="overview" className="w-full">
+              <TabsList className="grid w-full grid-cols-6 bg-transparent h-auto p-0 border-0">
+                <TabsTrigger
+                  value="overview"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-slate-900 rounded-none py-4 px-6 font-medium text-slate-600 data-[state=active]:text-slate-900"
+                >
+                  Live Overview
+                </TabsTrigger>
+                <TabsTrigger
+                  value="people"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-slate-900 rounded-none py-4 px-6 font-medium text-slate-600 data-[state=active]:text-slate-900"
+                >
+                  People
+                </TabsTrigger>
+                <TabsTrigger
+                  value="content"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-slate-900 rounded-none py-4 px-6 font-medium text-slate-600 data-[state=active]:text-slate-900"
+                >
+                  Content
+                </TabsTrigger>
+                <TabsTrigger
+                  value="assignments"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-slate-900 rounded-none py-4 px-6 font-medium text-slate-600 data-[state=active]:text-slate-900"
+                >
+                  Assignments
+                </TabsTrigger>
+                <TabsTrigger
+                  value="visual-aids"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-slate-900 rounded-none py-4 px-6 font-medium text-slate-600 data-[state=active]:text-slate-900"
+                >
+                  Visual Aids
+                </TabsTrigger>
+                <TabsTrigger
+                  value="analytics"
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-slate-900 rounded-none py-4 px-6 font-medium text-slate-600 data-[state=active]:text-slate-900"
+                >
+                  Analytics
+                </TabsTrigger>
+              </TabsList>
 
-            {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-8">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center text-lg">
-                      <BookOpen className="h-5 w-5 mr-2" />
-                      Classroom Info
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Description</Label>
-                      <p className="text-sm text-gray-600 mt-1">{classroom.description || "No description provided"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Schedule</Label>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {classroom.schedule.days.join(", ")} at {classroom.schedule.time || "No time set"}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-700">Created</Label>
-                      <p className="text-sm text-gray-600 mt-1">{formatDate(classroom.createdAt)}</p>
-                    </div>
-                    {classroom.curriculumUrl && (
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Curriculum</Label>
-                        <Button size="sm" variant="outline" className="mt-2 w-full bg-transparent" asChild>
-                          <a href={classroom.curriculumUrl} target="_blank" rel="noopener noreferrer">
-                            <Download className="h-3 w-3 mr-2" />
-                            View Curriculum PDF
-                          </a>
-                        </Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Google Meet Section */}
-                {classroom.meetLink && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center text-lg">
-                        <Video className="h-5 w-5 mr-2" />
-                        Google Meet
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-center space-y-3">
-                        <p className="text-sm text-gray-600">Join the class meeting</p>
-                        <Button className="w-full" asChild>
-                          <a href={classroom.meetLink} target="_blank" rel="noopener noreferrer">
-                            <Video className="h-4 w-4 mr-2" />
-                            Join Class Meeting
-                          </a>
-                        </Button>
+              {/* Live Overview Tab */}
+              <TabsContent value="overview" className="mt-0 p-6 space-y-8">
+                {/* Key Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-blue-700">Total Students</p>
+                          <p className="text-3xl font-bold text-blue-900">{classroom.students.length}</p>
+                        </div>
+                        <Users className="w-8 h-8 text-blue-600" />
                       </div>
                     </CardContent>
                   </Card>
-                )}
 
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center text-lg">
-                      <TrendingUp className="h-5 w-5 mr-2" />
-                      Progress
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <Label className="text-sm font-medium text-gray-700">Curriculum Progress</Label>
-                        <span className="text-sm text-gray-600">{Math.round(classroom.curriculumProgress)}%</span>
-                      </div>
-                      <Progress value={classroom.curriculumProgress} className="h-2" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 pt-2">
-                      <div className="text-center p-3 bg-blue-50 rounded-lg">
-                        <p className="text-2xl font-bold text-blue-600">{assignments.length}</p>
-                        <p className="text-xs text-gray-600">Assignments</p>
-                      </div>
-                      <div className="text-center p-3 bg-green-50 rounded-lg">
-                        <p className="text-2xl font-bold text-green-600">{content.length}</p>
-                        <p className="text-xs text-gray-600">Resources</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Quick Actions */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center text-lg">
-                    <Calendar className="h-5 w-5 mr-2" />
-                    Quick Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent"
-                      onClick={() => setShowAddAssignment(true)}
-                    >
-                      <Plus className="h-5 w-5" />
-                      <span className="text-sm">New Assignment</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent"
-                      onClick={() => setShowAddContent(true)}
-                    >
-                      <BookOpen className="h-5 w-5" />
-                      <span className="text-sm">Upload Content</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent"
-                      onClick={() => setShowWorksheetGenerator(true)}
-                    >
-                      <FileText className="h-5 w-5" />
-                      <span className="text-sm">AI Worksheet</span>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-auto p-4 flex flex-col items-center space-y-2 bg-transparent"
-                      onClick={() => setShowAIPlanning(true)}
-                    >
-                      <Target className="h-5 w-5" />
-                      <span className="text-sm">Lesson Planner</span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Recent Activity */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest assignments and submissions</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {assignments.slice(0, 5).map((assignment) => (
-                      <div
-                        key={assignment.id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                            <FileText className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-medium">{assignment.title}</h3>
-                            <p className="text-sm text-gray-500">Due: {formatDate(assignment.dueDate)}</p>
-                          </div>
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-green-100">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-green-700">Active Assignments</p>
+                          <p className="text-3xl font-bold text-green-900">{assignments.length}</p>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="secondary">
-                            {Object.keys(assignment.submissions || {}).length} submissions
-                          </Badge>
-                          <Button size="sm" variant="outline">
-                            View
-                          </Button>
+                        <FileText className="w-8 h-8 text-green-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-purple-50 to-purple-100">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-purple-700">Learning Resources</p>
+                          <p className="text-3xl font-bold text-purple-900">{content.length}</p>
                         </div>
+                        <BookOpen className="w-8 h-8 text-purple-600" />
                       </div>
-                    ))}
-                    {assignments.length === 0 && (
-                      <div className="text-center py-12">
-                        <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-500 mb-4">No assignments yet</p>
-                        <Button onClick={() => setShowAddAssignment(true)}>Create First Assignment</Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-50 to-orange-100">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-orange-700">Progress</p>
+                          <p className="text-3xl font-bold text-orange-900">
+                            {Math.round(classroom.curriculumProgress || 0)}%
+                          </p>
+                        </div>
+                        <TrendingUp className="w-8 h-8 text-orange-600" />
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* People Tab */}
-            <TabsContent value="people" className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <h3 className="text-xl font-semibold">Students ({classroomStudents.length})</h3>
-                <Badge variant="outline" className="cursor-pointer hover:bg-gray-50 w-fit" onClick={copyInviteCode}>
-                  <Copy className="h-3 w-3 mr-1" />
-                  Invite Code: {classroom.inviteCode}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {classroomStudents.map((student) => {
-                  // Generate mock student data
-                  const studentData = {
-                    id: student.id,
-                    displayName: student.displayName,
-                    email: student.email,
-                    photoURL: student.photoURL,
-                    joinedAt: student.createdAt?.toDate?.() || new Date(student.createdAt),
-                    stats: {
-                      assignmentsCompleted: Math.floor(Math.random() * 15) + 5,
-                      assignmentsPending: Math.floor(Math.random() * 5),
-                      assignmentsOverdue: Math.floor(Math.random() * 3),
-                      averageScore: Math.floor(Math.random() * 30) + 70,
-                      lastActive: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
-                      streak: Math.floor(Math.random() * 10),
-                    },
-                    recentGrades: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, i) => ({
-                      assignmentTitle: `Assignment ${i + 1}`,
-                      score: Math.floor(Math.random() * 30) + 70,
-                      maxScore: 100,
-                      date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-                    })),
-                  }
-
-                  return (
-                    <StudentCard
-                      key={student.id}
-                      student={studentData}
-                      onRemove={removeStudent}
-                      showRemoveButton={true}
-                    />
-                  )
-                })}
-              </div>
-
-              {classroomStudents.length === 0 && (
-                <div className="text-center py-16">
-                  <Users className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No students yet</h3>
-                  <p className="text-gray-500 mb-6">Share the invite code with your students to get started</p>
-                  <Button onClick={copyInviteCode}>
-                    <Copy className="h-4 w-4 mr-2" />
-                    Copy Invite Code
-                  </Button>
+                    </CardContent>
+                  </Card>
                 </div>
-              )}
-            </TabsContent>
 
-            {/* Content Tab */}
-            <TabsContent value="content" className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <h3 className="text-xl font-semibold">Learning Resources</h3>
-                <Button onClick={() => setShowAddContent(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Content
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {content.map((item) => (
-                  <Card key={item.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-start space-x-3">
-                          <div className="h-12 w-12 rounded-lg bg-green-100 flex items-center justify-center">
-                            {item.type === "pdf" && <FileText className="h-6 w-6 text-green-600" />}
-                            {item.type === "image" && <BookOpen className="h-6 w-6 text-green-600" />}
-                            {item.type === "video" && <Video className="h-6 w-6 text-green-600" />}
-                            {item.type === "link" && <BookOpen className="h-6 w-6 text-green-600" />}
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-medium text-lg">{item.title}</h4>
-                            <p className="text-sm text-gray-500">{item.topic}</p>
-                            <p className="text-xs text-gray-400 mt-1">{formatDate(item.uploadedAt)}</p>
-                          </div>
+                {/* Main Content Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Classroom Information */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-lg font-semibold text-slate-900">Classroom Details</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-sm font-medium text-slate-700">Description</Label>
+                          <p className="text-sm text-slate-600 mt-1 leading-relaxed">
+                            {classroom.description || "No description provided"}
+                          </p>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => deleteContent(item.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
 
-                      {UploadThingService.isImageFile(item.url) && (
-                        <img
-                          src={item.url || "/placeholder.svg"}
-                          alt={item.title}
-                          className="w-full h-32 object-cover rounded-lg mb-4"
-                        />
-                      )}
-
-                      {UploadThingService.isPdfFile(item.url) && (
-                        <div className="mb-4 p-4 border rounded-lg bg-red-50 text-center">
-                          <FileText className="h-8 w-8 text-red-500 mx-auto mb-2" />
-                          <p className="text-sm text-gray-700 font-medium">PDF Document</p>
-                          <p className="text-xs text-gray-500 mb-3">{item.title}</p>
-                          <Button size="sm" variant="outline" onClick={() => openPdfViewer(item.url, item.title)}>
-                            <FileText className="h-3 w-3 mr-1" />
-                            Preview PDF
-                          </Button>
-                        </div>
-                      )}
-
-                      <div className="flex gap-2">
-                        <Button size="sm" className="flex-1" asChild>
-                          <a href={item.url} target="_blank" rel="noopener noreferrer">
-                            <Download className="h-3 w-3 mr-2" />
-                            {item.type === "link" ? "Visit Link" : "Download"}
-                          </a>
-                        </Button>
-                        {UploadThingService.isPdfFile(item.url) && (
-                          <Button size="sm" variant="outline" onClick={() => openPdfViewer(item.url, item.title)}>
-                            <FileText className="h-3 w-3 mr-1" />
-                            View PDF
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {content.length === 0 && (
-                  <div className="col-span-full text-center py-16">
-                    <BookOpen className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No content yet</h3>
-                    <p className="text-gray-500 mb-6">Upload learning materials for your students</p>
-                    <Button onClick={() => setShowAddContent(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add First Content
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            {/* Assignments Tab */}
-            <TabsContent value="assignments" className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <h3 className="text-xl font-semibold">Assignments</h3>
-                <Button onClick={() => setShowAddAssignment(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Assignment
-                </Button>
-              </div>
-
-              <div className="space-y-6">
-                {assignments.map((assignment) => (
-                  <Card key={assignment.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex flex-wrap items-center gap-2 mb-3">
-                            <h4 className="font-medium text-xl">{assignment.title}</h4>
-                            <Badge variant="outline">{assignment.totalPoints} points</Badge>
-                          </div>
-                          <p className="text-gray-600 mb-4">{assignment.description}</p>
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                            <span className="flex items-center">
-                              <Calendar className="h-4 w-4 mr-1" />
-                              Due: {formatDate(assignment.dueDate)}
-                            </span>
-                            <span className="flex items-center">
-                              <Users className="h-4 w-4 mr-1" />
-                              {Object.keys(assignment.submissions || {}).length} submissions
+                        <div>
+                          <Label className="text-sm font-medium text-slate-700">Schedule</Label>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Calendar className="w-4 h-4 text-slate-500" />
+                            <span className="text-sm text-slate-600">
+                              {classroom.schedule?.days?.join(", ") || "No schedule set"}
                             </span>
                           </div>
-                          {assignment.attachments && assignment.attachments.length > 0 && (
-                            <div className="mt-4">
-                              {UploadThingService.isPdfFile(assignment.attachments[0]) ? (
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      openPdfViewer(assignment.attachments[0], `${assignment.title} - Attachment`)
-                                    }
-                                  >
-                                    <FileText className="h-3 w-3 mr-2" />
-                                    Preview PDF
-                                  </Button>
-                                  <Button size="sm" variant="outline" asChild>
-                                    <a href={assignment.attachments[0]} target="_blank" rel="noopener noreferrer">
-                                      <ExternalLink className="h-3 w-3 mr-2" />
-                                      Open in New Tab
-                                    </a>
-                                  </Button>
-                                  <Button size="sm" variant="outline" asChild>
-                                    <a
-                                      href={assignment.attachments[0]}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      download
-                                    >
-                                      <Download className="h-3 w-3 mr-2" />
-                                      Download
-                                    </a>
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button size="sm" variant="outline" asChild>
-                                  <a href={assignment.attachments[0]} target="_blank" rel="noopener noreferrer">
-                                    <Download className="h-3 w-3 mr-2" />
-                                    View Attachment
-                                  </a>
-                                </Button>
-                              )}
+                          {classroom.schedule?.time && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <Clock className="w-4 h-4 text-slate-500" />
+                              <span className="text-sm text-slate-600">{classroom.schedule.time}</span>
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline">
-                            <Edit className="h-4 w-4 mr-1" />
-                            Edit
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => deleteAssignment(assignment.id)}>
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
-                          </Button>
+
+                        <div>
+                          <Label className="text-sm font-medium text-slate-700">Created</Label>
+                          <p className="text-sm text-slate-600 mt-1">{formatDate(classroom.createdAt)}</p>
+                        </div>
+                      </div>
+
+                      {classroom.curriculumUrl && (
+                        <Button variant="outline" size="sm" className="w-full bg-transparent" asChild>
+                          <a href={classroom.curriculumUrl} target="_blank" rel="noopener noreferrer">
+                            <Download className="w-4 h-4 mr-2" />
+                            View Curriculum PDF
+                          </a>
+                        </Button>
+                      )}
+
+                      {classroom.meetLink && (
+                        <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
+                          <a href={classroom.meetLink} target="_blank" rel="noopener noreferrer">
+                            <Video className="w-4 h-4 mr-2" />
+                            Join Class Meeting
+                          </a>
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Progress Overview */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-lg font-semibold text-slate-900">Progress Overview</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div>
+                        <div className="flex justify-between items-center mb-3">
+                          <Label className="text-sm font-medium text-slate-700">Curriculum Progress</Label>
+                          <span className="text-sm font-semibold text-slate-900">
+                            {Math.round(classroom.curriculumProgress || 0)}%
+                          </span>
+                        </div>
+                        <Progress value={classroom.curriculumProgress || 0} className="h-2 bg-slate-200" />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-4 bg-slate-50 rounded-lg">
+                          <p className="text-2xl font-bold text-slate-900">{assignments.length}</p>
+                          <p className="text-xs text-slate-600 mt-1">Total Assignments</p>
+                        </div>
+                        <div className="text-center p-4 bg-slate-50 rounded-lg">
+                          <p className="text-2xl font-bold text-slate-900">{content.length}</p>
+                          <p className="text-xs text-slate-600 mt-1">Learning Resources</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">Completed Topics</span>
+                          <span className="font-medium text-slate-900">12/20</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">Average Score</span>
+                          <span className="font-medium text-slate-900">85%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-slate-600">Engagement Rate</span>
+                          <span className="font-medium text-slate-900">92%</span>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                ))}
 
-                {assignments.length === 0 && (
+                  {/* Quick Actions */}
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-lg font-semibold text-slate-900">Quick Actions</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 gap-3">
+                        <Button
+                          variant="outline"
+                          className="justify-start h-auto p-4 text-left bg-transparent"
+                          onClick={() => setShowAddAssignment(true)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                              <Plus className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900">New Assignment</p>
+                              <p className="text-xs text-slate-600">Create and distribute</p>
+                            </div>
+                          </div>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="justify-start h-auto p-4 text-left bg-transparent"
+                          onClick={() => setShowAddContent(true)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                              <BookOpen className="w-4 h-4 text-green-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900">Upload Content</p>
+                              <p className="text-xs text-slate-600">Add learning materials</p>
+                            </div>
+                          </div>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="justify-start h-auto p-4 text-left bg-transparent"
+                          onClick={() => setShowWorksheetGenerator(true)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                              <Zap className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900">AI Worksheet</p>
+                              <p className="text-xs text-slate-600">Generate practice problems</p>
+                            </div>
+                          </div>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="justify-start h-auto p-4 text-left bg-transparent"
+                          onClick={() => setShowAIPlanning(true)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                              <Target className="w-4 h-4 text-orange-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900">Lesson Planner</p>
+                              <p className="text-xs text-slate-600">AI-powered planning</p>
+                            </div>
+                          </div>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Recent Activity */}
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-lg font-semibold text-slate-900">Recent Activity</CardTitle>
+                    <CardDescription className="text-slate-600">Latest assignments and submissions</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {assignments.length > 0 ? (
+                      <div className="space-y-4">
+                        {assignments.slice(0, 5).map((assignment) => (
+                          <div
+                            key={assignment.id}
+                            className="flex items-center justify-between p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                                <FileText className="w-5 h-5 text-slate-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-medium text-slate-900">{assignment.title}</h4>
+                                <div className="flex items-center gap-4 text-sm text-slate-600 mt-1">
+                                  <span>Due: {formatDate(assignment.dueDate)}</span>
+                                  <span>•</span>
+                                  <span>{Object.keys(assignment.submissions || {}).length} submissions</span>
+                                </div>
+                              </div>
+                            </div>
+                            <Button size="sm" variant="outline">
+                              View Details
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12">
+                        <FileText className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                        <h3 className="font-medium text-slate-900 mb-2">No assignments yet</h3>
+                        <p className="text-slate-600 mb-4">Create your first assignment to get started</p>
+                        <Button onClick={() => setShowAddAssignment(true)}>Create Assignment</Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* People Tab */}
+              <TabsContent value="people" className="mt-0 p-6 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-900">Students</h2>
+                    <p className="text-slate-600">{classroomStudents.length} enrolled students</p>
+                  </div>
+                  <Button variant="outline" onClick={copyInviteCode} className="font-mono text-sm bg-transparent">
+                    <Copy className="w-4 h-4 mr-2" />
+                    Invite Code: {classroom.inviteCode}
+                  </Button>
+                </div>
+
+                {classroomStudents.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {classroomStudents.map((student) => {
+                      // Generate mock student data
+                      const studentData = {
+                        id: student.id,
+                        displayName: student.displayName,
+                        email: student.email,
+                        photoURL: student.photoURL,
+                        joinedAt: student.createdAt?.toDate?.() || new Date(student.createdAt),
+                        stats: {
+                          assignmentsCompleted: Math.floor(Math.random() * 15) + 5,
+                          assignmentsPending: Math.floor(Math.random() * 5),
+                          assignmentsOverdue: Math.floor(Math.random() * 3),
+                          averageScore: Math.floor(Math.random() * 30) + 70,
+                          lastActive: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
+                          streak: Math.floor(Math.random() * 10),
+                        },
+                        recentGrades: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, i) => ({
+                          assignmentTitle: `Assignment ${i + 1}`,
+                          score: Math.floor(Math.random() * 30) + 70,
+                          maxScore: 100,
+                          date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+                        })),
+                      }
+
+                      return (
+                        <Card key={student.id} className="border-0 shadow-sm hover:shadow-md transition-shadow">
+                          <CardContent className="p-6">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center">
+                                  {student.photoURL ? (
+                                    <img
+                                      src={student.photoURL || "/placeholder.svg"}
+                                      alt={student.displayName}
+                                      className="w-12 h-12 rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-lg font-semibold text-slate-600">
+                                      {student.displayName?.charAt(0)?.toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-slate-900">{student.displayName}</h3>
+                                  <p className="text-sm text-slate-600">{student.email}</p>
+                                </div>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => removeStudent(student.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                  <p className="text-slate-600">Completed</p>
+                                  <p className="font-semibold text-slate-900">
+                                    {studentData.stats.assignmentsCompleted}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-slate-600">Average</p>
+                                  <p className="font-semibold text-slate-900">{studentData.stats.averageScore}%</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-slate-600">Last Active</span>
+                                <span className="text-slate-900">{formatDate(studentData.stats.lastActive)}</span>
+                              </div>
+
+                              {studentData.stats.assignmentsPending > 0 && (
+                                <div className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 px-2 py-1 rounded">
+                                  <AlertCircle className="w-3 h-3" />
+                                  {studentData.stats.assignmentsPending} pending assignments
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                ) : (
                   <div className="text-center py-16">
-                    <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments yet</h3>
-                    <p className="text-gray-500 mb-6">Create assignments to track student progress</p>
-                    <Button onClick={() => setShowAddAssignment(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create First Assignment
+                    <Users className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-slate-900 mb-2">No students enrolled yet</h3>
+                    <p className="text-slate-600 mb-6">Share the invite code with your students to get started</p>
+                    <Button onClick={copyInviteCode}>
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Invite Code
                     </Button>
                   </div>
                 )}
-              </div>
-            </TabsContent>
+              </TabsContent>
 
-            {/* Visual Aids Tab */}
-            <TabsContent value="visual-aids" className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-semibold">Visual Aid Generator</h3>
-                  <p className="text-gray-600">Create educational diagrams and visual aids for your students</p>
+              {/* Content Tab */}
+                            {/* Content Tab - Using the new ContentTab component */}
+                            <TabsContent value="content" className="mt-0 p-6 space-y-6">
+                <ContentTab
+                  content={content}
+                  onShowAddContent={() => setShowAddContent(true)}
+                  deleteContent={deleteContent}
+                  userRole="teacher"
+                  classroomId={classroomId}
+                />
+              </TabsContent>
+
+              {/* Assignments Tab */}
+              <TabsContent value="assignments" className="mt-0 p-6">
+              <AssignmentsTab
+  assignments={assignments}
+  onShowAddAssignment={() => setShowAddAssignment(true)}
+  onDeleteAssignment={deleteAssignment}
+/>
+              </TabsContent>
+
+              {/* Visual Aids Tab */}
+              <TabsContent value="visual-aids" className="mt-0 p-6 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-900">Visual Aid Generator</h2>
+                    <p className="text-slate-600">Create educational diagrams and visual aids for your students</p>
+                  </div>
+                  <Badge variant="outline" className="w-fit bg-purple-50 text-purple-700 border-purple-200">
+                    <Brain className="w-3 h-3 mr-1" />
+                    AI Powered
+                  </Badge>
                 </div>
-                <Badge variant="outline" className="w-fit">
-                  <Brain className="h-3 w-3 mr-1" />
-                  AI Powered
-                </Badge>
-              </div>
 
-              <VisualAidGenerator />
-            </TabsContent>
+                <VisualAidGenerator />
+              </TabsContent>
 
-            {/* Analytics Tab */}
-            <TabsContent value="analytics" className="space-y-8">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Performance by Topic</CardTitle>
-                    <CardDescription>Average scores across different topics</CardDescription>
+              {/* Analytics Tab */}
+              <TabsContent value="analytics" className="mt-0 p-6 space-y-8">
+                <div>
+                  <h2 className="text-2xl font-semibold text-slate-900 mb-2">Analytics Dashboard</h2>
+                  <p className="text-slate-600">Track student performance and engagement</p>
+                </div>
+
+                {/* Key Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-green-100">
+                    <CardContent className="p-6 text-center">
+                      <TrendingUp className="w-8 h-8 text-green-600 mx-auto mb-3" />
+                      <div className="text-3xl font-bold text-green-900 mb-1">
+                        {Math.round(
+                          performanceData.reduce((sum, item) => sum + item.average, 0) / performanceData.length,
+                        )}
+                        %
+                      </div>
+                      <p className="text-sm text-green-700">Class Average</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-50 to-blue-100">
+                    <CardContent className="p-6 text-center">
+                      <Award className="w-8 h-8 text-blue-600 mx-auto mb-3" />
+                      <div className="text-3xl font-bold text-blue-900 mb-1">
+                        {gradeDistribution.find((g) => g.grade === "A")?.count || 0}
+                      </div>
+                      <p className="text-sm text-blue-700">Top Performers</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm bg-gradient-to-br from-orange-50 to-orange-100">
+                    <CardContent className="p-6 text-center">
+                      <Target className="w-8 h-8 text-orange-600 mx-auto mb-3" />
+                      <div className="text-3xl font-bold text-orange-900 mb-1">
+                        {(gradeDistribution.find((g) => g.grade === "D")?.count || 0) +
+                          (gradeDistribution.find((g) => g.grade === "F")?.count || 0)}
+                      </div>
+                      <p className="text-sm text-orange-700">Need Support</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Charts */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+                        <BarChart3 className="w-5 h-5" />
+                        Performance by Topic
+                      </CardTitle>
+                      <CardDescription className="text-slate-600">
+                        Average scores across different topics
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={performanceData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis
+                            dataKey="topic"
+                            tick={{ fontSize: 12, fill: "#64748b" }}
+                            axisLine={{ stroke: "#e2e8f0" }}
+                          />
+                          <YAxis tick={{ fontSize: 12, fill: "#64748b" }} axisLine={{ stroke: "#e2e8f0" }} />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "white",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "8px",
+                              boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                            }}
+                          />
+                          <Bar dataKey="average" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+                        <PieChart className="w-5 h-5" />
+                        Grade Distribution
+                      </CardTitle>
+                      <CardDescription className="text-slate-600">
+                        Overall grade distribution in the class
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <RechartsPieChart>
+                          <Pie
+                            data={gradeDistribution}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ grade, count }) => `${grade}: ${count}`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="count"
+                          >
+                            {gradeDistribution.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "white",
+                              border: "1px solid #e2e8f0",
+                              borderRadius: "8px",
+                              boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                            }}
+                          />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Detailed Analytics */}
+                <Card className="border-0 shadow-sm">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+                      <Activity className="w-5 h-5" />
+                      Detailed Insights
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={performanceData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="topic" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="average" fill="#3b82f6" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Grade Distribution</CardTitle>
-                    <CardDescription>Overall grade distribution in the class</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={gradeDistribution}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ grade, count }) => `${grade}: ${count}`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="count"
-                        >
-                          {gradeDistribution.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center text-lg">
-                      <TrendingUp className="h-5 w-5 mr-2" />
-                      Class Average
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-center">
-                    <div className="text-4xl font-bold text-blue-600 mb-2">
-                      {Math.round(
-                        performanceData.reduce((sum, item) => sum + item.average, 0) / performanceData.length,
-                      )}
-                      %
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="text-center p-4 bg-slate-50 rounded-lg">
+                        <p className="text-2xl font-bold text-slate-900 mb-1">92%</p>
+                        <p className="text-sm text-slate-600">Attendance Rate</p>
+                      </div>
+                      <div className="text-center p-4 bg-slate-50 rounded-lg">
+                        <p className="text-2xl font-bold text-slate-900 mb-1">87%</p>
+                        <p className="text-sm text-slate-600">Assignment Completion</p>
+                      </div>
+                      <div className="text-center p-4 bg-slate-50 rounded-lg">
+                        <p className="text-2xl font-bold text-slate-900 mb-1">4.2</p>
+                        <p className="text-sm text-slate-600">Avg. Days to Submit</p>
+                      </div>
+                      <div className="text-center p-4 bg-slate-50 rounded-lg">
+                        <p className="text-2xl font-bold text-slate-900 mb-1">78%</p>
+                        <p className="text-sm text-slate-600">Engagement Score</p>
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-500">Overall performance</p>
                   </CardContent>
                 </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
 
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center text-lg">
-                      <Award className="h-5 w-5 mr-2" />
-                      Top Performers
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-center">
-                    <div className="text-4xl font-bold text-green-600 mb-2">
-                      {gradeDistribution.find((g) => g.grade === "A")?.count || 0}
-                    </div>
-                    <p className="text-sm text-gray-500">Students with A grades</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center text-lg">
-                      <Target className="h-5 w-5 mr-2" />
-                      Needs Support
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-center">
-                    <div className="text-4xl font-bold text-red-600 mb-2">
-                      {(gradeDistribution.find((g) => g.grade === "D")?.count || 0) +
-                        (gradeDistribution.find((g) => g.grade === "F")?.count || 0)}
-                    </div>
-                    <p className="text-sm text-gray-500">Students needing help</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
-
+          {/* Modals */}
           {/* Add Assignment Dialog */}
           <Dialog open={showAddAssignment} onOpenChange={setShowAddAssignment}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create New Assignment</DialogTitle>
-                <DialogDescription>Add a new assignment for your students</DialogDescription>
+                <DialogTitle className="text-xl font-semibold">Create New Assignment</DialogTitle>
+                <DialogDescription className="text-slate-600">
+                  Add a new assignment for your students to complete
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddAssignment} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="title">Assignment Title</Label>
+                    <Label htmlFor="title" className="text-sm font-medium text-slate-700">
+                      Assignment Title
+                    </Label>
                     <Input
                       id="title"
                       value={newAssignment.title}
                       onChange={(e) => setNewAssignment({ ...newAssignment, title: e.target.value })}
                       placeholder="Enter assignment title"
+                      className="border-slate-300 focus:border-slate-500"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="points">Total Points</Label>
+                    <Label htmlFor="points" className="text-sm font-medium text-slate-700">
+                      Total Points
+                    </Label>
                     <Input
                       id="points"
                       type="number"
@@ -955,33 +1085,40 @@ export default function TeacherClassroomPage() {
                       onChange={(e) =>
                         setNewAssignment({ ...newAssignment, totalPoints: Number.parseInt(e.target.value) })
                       }
+                      className="border-slate-300 focus:border-slate-500"
                       min="1"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description" className="text-sm font-medium text-slate-700">
+                    Description
+                  </Label>
                   <Textarea
                     id="description"
                     value={newAssignment.description}
                     onChange={(e) => setNewAssignment({ ...newAssignment, description: e.target.value })}
-                    placeholder="Describe the assignment requirements"
+                    placeholder="Describe the assignment requirements and instructions"
+                    className="border-slate-300 focus:border-slate-500"
                     rows={4}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dueDate">Due Date</Label>
+                  <Label htmlFor="dueDate" className="text-sm font-medium text-slate-700">
+                    Due Date
+                  </Label>
                   <Input
                     id="dueDate"
                     type="datetime-local"
                     value={newAssignment.dueDate}
                     onChange={(e) => setNewAssignment({ ...newAssignment, dueDate: e.target.value })}
+                    className="border-slate-300 focus:border-slate-500"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Attachment (Optional)</Label>
+                  <Label className="text-sm font-medium text-slate-700">Attachment (Optional)</Label>
                   <UploadThingFileUpload
                     onUploadComplete={handleAssignmentUpload}
                     acceptedTypes={["application/pdf", ".doc", ".docx", ".txt"]}
@@ -989,14 +1126,24 @@ export default function TeacherClassroomPage() {
                     disabled={isLoading}
                   />
                   {assignmentFile && (
-                    <div className="text-sm text-green-600">✓ {assignmentFile.filename} uploaded successfully</div>
+                    <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                      <CheckCircle className="w-4 h-4" />
+                      {assignmentFile.filename} uploaded successfully
+                    </div>
                   )}
                 </div>
-                <div className="flex justify-end space-x-3 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setShowAddAssignment(false)}>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowAddAssignment(false)}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-50"
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit">Create Assignment</Button>
+                  <Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white">
+                    Create Assignment
+                  </Button>
                 </div>
               </form>
             </DialogContent>
@@ -1006,41 +1153,51 @@ export default function TeacherClassroomPage() {
           <Dialog open={showAddContent} onOpenChange={setShowAddContent}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add Learning Content</DialogTitle>
-                <DialogDescription>Upload or link to learning materials</DialogDescription>
+                <DialogTitle className="text-xl font-semibold">Add Learning Content</DialogTitle>
+                <DialogDescription className="text-slate-600">
+                  Upload or link to learning materials for your students
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddContent} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="contentTitle">Title</Label>
+                    <Label htmlFor="contentTitle" className="text-sm font-medium text-slate-700">
+                      Title
+                    </Label>
                     <Input
                       id="contentTitle"
                       value={newContent.title}
                       onChange={(e) => setNewContent({ ...newContent, title: e.target.value })}
                       placeholder="Enter content title"
+                      className="border-slate-300 focus:border-slate-500"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="topic">Topic</Label>
+                    <Label htmlFor="topic" className="text-sm font-medium text-slate-700">
+                      Topic
+                    </Label>
                     <Input
                       id="topic"
                       value={newContent.topic}
                       onChange={(e) => setNewContent({ ...newContent, topic: e.target.value })}
                       placeholder="e.g., Chapter 1, Algebra"
+                      className="border-slate-300 focus:border-slate-500"
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="contentType">Content Type</Label>
+                  <Label htmlFor="contentType" className="text-sm font-medium text-slate-700">
+                    Content Type
+                  </Label>
                   <Select
                     value={newContent.type}
                     onValueChange={(value: "pdf" | "image" | "video" | "link") =>
                       setNewContent({ ...newContent, type: value })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="border-slate-300 focus:border-slate-500">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1053,19 +1210,22 @@ export default function TeacherClassroomPage() {
                 </div>
                 {newContent.type === "link" ? (
                   <div className="space-y-2">
-                    <Label htmlFor="url">URL</Label>
+                    <Label htmlFor="url" className="text-sm font-medium text-slate-700">
+                      URL
+                    </Label>
                     <Input
                       id="url"
                       type="url"
                       value={newContent.url}
                       onChange={(e) => setNewContent({ ...newContent, url: e.target.value })}
                       placeholder="https://example.com"
+                      className="border-slate-300 focus:border-slate-500"
                       required
                     />
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <Label>Upload File</Label>
+                    <Label className="text-sm font-medium text-slate-700">Upload File</Label>
                     <UploadThingFileUpload
                       onUploadComplete={handleContentUpload}
                       acceptedTypes={
@@ -1078,14 +1238,28 @@ export default function TeacherClassroomPage() {
                       maxSizeMB={50}
                       disabled={isLoading}
                     />
-                    {newContent.url && <div className="text-sm text-green-600">✓ File uploaded successfully</div>}
+                    {newContent.url && (
+                      <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-lg">
+                        <CheckCircle className="w-4 h-4" />
+                        File uploaded successfully
+                      </div>
+                    )}
                   </div>
                 )}
-                <div className="flex justify-end space-x-3 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setShowAddContent(false)}>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowAddContent(false)}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-50"
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={!newContent.url && newContent.type !== "link"}>
+                  <Button
+                    type="submit"
+                    disabled={!newContent.url && newContent.type !== "link"}
+                    className="bg-slate-900 hover:bg-slate-800 text-white disabled:bg-slate-400"
+                  >
                     Add Content
                   </Button>
                 </div>
@@ -1093,42 +1267,29 @@ export default function TeacherClassroomPage() {
             </DialogContent>
           </Dialog>
 
-          {/* AI Planning Dialog */}
-          <Dialog open={showAIPlanning} onOpenChange={setShowAIPlanning}>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>AI Lesson Planner</DialogTitle>
-                <DialogDescription>Generate lesson plans and teaching strategies with AI</DialogDescription>
-              </DialogHeader>
-              <div className="text-center py-12">
-                <Target className="h-16 w-16 text-blue-600 mx-auto mb-4" />
-                <h3 className="text-xl font-medium mb-4">AI Lesson Planning</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                  This feature will help you create comprehensive lesson plans, suggest teaching strategies, and
-                  generate curriculum content.
-                </p>
-                <Badge variant="secondary" className="text-sm">
-                  Coming Soon
-                </Badge>
-              </div>
-            </DialogContent>
-          </Dialog>
+
+   {/* AI Planning Dialog */}
+   <ClassroomPlanningAgent showAIPlanning={showAIPlanning} setShowAIPlanning={setShowAIPlanning} classroomId={classroomId} />
 
           {/* AI Worksheet Generator Dialog */}
           <Dialog open={showWorksheetGenerator} onOpenChange={setShowWorksheetGenerator}>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>AI Worksheet Generator</DialogTitle>
-                <DialogDescription>Create custom worksheets and practice problems</DialogDescription>
+                <DialogTitle className="text-xl font-semibold">AI Worksheet Generator</DialogTitle>
+                <DialogDescription className="text-slate-600">
+                  Create custom worksheets and practice problems
+                </DialogDescription>
               </DialogHeader>
               <div className="text-center py-12">
-                <FileText className="h-16 w-16 text-green-600 mx-auto mb-4" />
-                <h3 className="text-xl font-medium mb-4">AI Worksheet Generator</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-4">AI Worksheet Generator</h3>
+                <p className="text-slate-600 mb-6 max-w-md mx-auto leading-relaxed">
                   Generate custom worksheets, practice problems, and assessments tailored to your curriculum and student
-                  level.
+                  level with AI assistance.
                 </p>
-                <Badge variant="secondary" className="text-sm">
+                <Badge variant="secondary" className="bg-slate-100 text-slate-700">
                   Coming Soon
                 </Badge>
               </div>
@@ -1137,12 +1298,30 @@ export default function TeacherClassroomPage() {
 
           {/* PDF Viewer Dialog */}
           <Dialog open={showPdfViewer} onOpenChange={setShowPdfViewer}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{selectedPdf?.title || "PDF Viewer"}</DialogTitle>
-                <DialogDescription>View the document</DialogDescription>
+            <DialogContent className="max-w-6xl max-h-[90vh] p-0 overflow-hidden">
+              <DialogHeader className="px-6 py-4 border-b border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <DialogTitle className="text-xl font-semibold text-slate-900">
+                      {selectedPdf?.title || "PDF Viewer"}
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-600">
+                      View and interact with the document
+                    </DialogDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowPdfViewer(false)}
+                    className="border-slate-300 text-slate-700 hover:bg-slate-50"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </DialogHeader>
-              {selectedPdf && <UploadThingPDFViewer url={selectedPdf.url} title={selectedPdf.title} />}
+              <div className="h-[80vh] overflow-auto">
+                {selectedPdf && <UploadThingPDFViewer url={selectedPdf.url} title={selectedPdf.title} />}
+              </div>
             </DialogContent>
           </Dialog>
         </div>

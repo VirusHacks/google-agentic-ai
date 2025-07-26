@@ -12,9 +12,9 @@ export async function drawOnBlackboard(input: DrawOnBlackboardInput): Promise<Dr
     },
   })
 
-  if (!media.url) {
+  if (!media?.url) {
     throw new Error("Image generation failed to return a data URI.")
   }
 
-  return { imageDataUri: media.url }
+  return { imageDataUri: media?.url || "" }
 }
