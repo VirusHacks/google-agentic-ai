@@ -92,7 +92,7 @@ export default function TakeTestPage() {
         studentName: user.displayName || user.email,
         answers: {},
         score: 0,
-        maxScore: test.totalPoints,
+        maxScore: test.totalMarks,
         autoGradedScore: 0,
         manualGradedScore: 0,
         startedAt: new Date(),
@@ -101,7 +101,14 @@ export default function TakeTestPage() {
       }
 
       const submissionId = await addDocument(`classrooms/${classroomId}/test_submissions`, submissionData)
-      setSubmission({ id: submissionId, ...submissionData })
+      setSubmission({
+        id: submissionId,
+        ...submissionData,
+        aiGradedScore: 0,
+        submittedAt: new Date(),
+        questionFeedback: {},
+        studentName: submissionData.studentName ?? "", // Ensure studentName is always a string
+      })
       setHasStarted(true)
       setTimeLeft(test.duration * 60)
 
@@ -137,12 +144,12 @@ export default function TakeTestPage() {
       switch (question.type) {
         case "mcq":
           isCorrect = answer === question.correctAnswer
-          totalAutoGradable += question.points
+          totalAutoGradable += question.marks
           break
         case "fill":
           if (question.correctAnswer) {
             isCorrect = answer.toLowerCase().trim() === (question.correctAnswer as string).toLowerCase().trim()
-            totalAutoGradable += question.points
+            totalAutoGradable += question.marks
           }
           break
         case "match":
@@ -163,19 +170,19 @@ export default function TakeTestPage() {
             })
 
             isCorrect = correctMatches === question.pairs.length
-            totalAutoGradable += question.points
+            totalAutoGradable += question.marks
           }
           break
         case "short":
           if (question.correctAnswer) {
             isCorrect = answer.toLowerCase().trim() === (question.correctAnswer as string).toLowerCase().trim()
-            totalAutoGradable += question.points
+            totalAutoGradable += question.marks
           }
           break
       }
 
       if (isCorrect) {
-        autoScore += question.points
+        autoScore += question.marks
       }
     })
 
@@ -289,7 +296,7 @@ export default function TakeTestPage() {
                 <p className="text-sm text-muted-foreground">Questions</p>
               </div>
               <div className="p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold text-primary mb-2">{test.totalPoints}</div>
+                <div className="text-2xl font-bold text-primary mb-2">{test.totalMarks}</div>
                 <p className="text-sm text-muted-foreground">Total points</p>
               </div>
             </div>

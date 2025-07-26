@@ -25,14 +25,41 @@ function extractAndSanitizeTest(jsonText: string): TestGenerationResponse {
     throw new Error("Failed to parse AI output as JSON");
   }
 
+  // Handle both flat and sectioned test formats
+  let questions: any[] = [];
+  if (Array.isArray(parsed.questions)) {
+    // Flat format
+    questions = parsed.questions;
+  } else if (Array.isArray(parsed.sections)) {
+    // Sectioned format: flatten all questions from all sections
+    for (const section of parsed.sections) {
+      if (Array.isArray(section.questions)) {
+        for (const q of section.questions) {
+          // Map sectioned question fields to expected schema
+          questions.push({
+            type: q.type,
+            text: q.questionText || q.text || '',
+            marks: q.marks,
+            options: q.options,
+            pairs: q.pairs,
+          });
+        }
+      }
+    }
+  }
+
   // Defensive: fill in missing fields with defaults
   return TestGenerationResponseSchema.parse({
-    title: typeof parsed.title === "string" ? parsed.title : "Untitled Test",
-    description: typeof parsed.description === "string" ? parsed.description : "",
-    questions: Array.isArray(parsed.questions)
-      ? parsed.questions.map((q: any) => GeneratedQuestionSchema.parse(q))
-      : [],
-    estimatedDuration: typeof parsed.estimatedDuration === "number" ? parsed.estimatedDuration : 60,
+    title: parsed.title || parsed.testTitle || "Untitled Test",
+    description: parsed.description || parsed.testDescription || "",
+    questions: questions.map((q: any) => GeneratedQuestionSchema.parse(q)),
+    estimatedDuration: typeof parsed.estimatedDuration === "number"
+      ? parsed.estimatedDuration
+      : typeof parsed.duration === "number"
+        ? parsed.duration
+        : typeof parsed.duration === "string"
+          ? parseInt(parsed.duration) || 60
+          : 60,
     totalMarks: typeof parsed.totalMarks === "number" ? parsed.totalMarks : 100,
   });
 }
@@ -92,7 +119,7 @@ Return the response as a valid JSON object.
         maxOutputTokens: 4000,
       },
     })
-
+    console.log(result.text)
     return extractAndSanitizeTest(result.text)
   },
 ) 

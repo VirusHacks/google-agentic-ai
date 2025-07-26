@@ -40,7 +40,7 @@ export class AgentUtils {
       },
       body: JSON.stringify(data),
     })
-
+    console.log(response)
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new Error(`Agent call failed: ${response.statusText} - ${errorData.error || "Unknown error"}`)
@@ -50,14 +50,17 @@ export class AgentUtils {
   }
 
   static async generateTest(request: TestGenerationRequest) {
-    return this.callAgent("generate-questions", request)
+    const response = await this.callAgent("agents/test-generator", request)
+    return response.data
   }
 
   static async generateAnswers(request: AnswerGenerationRequest) {
-    return this.callAgent("answer-generator", request)
+    const response = await this.callAgent("agents/answer-generator", request)
+    return response.data
   }
 
   static async gradeSubmission(request: GradingRequest) {
-    return this.callAgent("auto-grader", request)
+    const response = await this.callAgent("agents/auto-grader", request)
+    return response.data
   }
 }

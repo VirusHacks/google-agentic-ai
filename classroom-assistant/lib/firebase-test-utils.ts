@@ -40,11 +40,12 @@ import {
       aiAnswers?: Record<string, any>,
     ): Promise<CreateTestResult> {
       try {
+        console.log('[createCompleteTest] INPUT testData:', JSON.stringify(testData, null, 2));
         return await runTransaction(db, async (transaction) => {
           // Create the test document
           const testsRef = collection(db, `classrooms/${testData.classroomId}/tests`)
           const testDocRef = doc(testsRef)
-  
+
           const testDoc: Omit<Test, "id"> = {
             classroomId: testData.classroomId,
             title: testData.title,
@@ -59,16 +60,23 @@ import {
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now(),
           }
-  
+
+          // Remove undefined fields (Firestore does not allow them)
+          Object.keys(testDoc).forEach(
+            (key) => (testDoc as Record<string, any>)[key] === undefined && delete (testDoc as Record<string, any>)[key]
+          )
+
+          console.log('[createCompleteTest] FINAL testDoc to Firestore:', JSON.stringify(testDoc, null, 2));
+
           transaction.set(testDocRef, testDoc)
-  
+
           let answersId: string | undefined
-  
+
           // If AI answers are provided, create the answers document
           if (aiAnswers && testData.aiGenerated) {
             const answersRef = collection(db, `classrooms/${testData.classroomId}/test_answers`)
             const answersDocRef = doc(answersRef)
-  
+
             const answersDoc: Omit<AIGeneratedAnswers, "id"> = {
               testId: testDocRef.id,
               classroomId: testData.classroomId,
@@ -76,15 +84,17 @@ import {
               generatedBy: testData.createdBy,
               generatedAt: Timestamp.now(),
             }
-  
+
             transaction.set(answersDocRef, answersDoc)
             answersId = answersDocRef.id
           }
-  
-          return {
+
+          const result = {
             testId: testDocRef.id,
             answersId,
           }
+          console.log('[createCompleteTest] RESULT:', JSON.stringify(result, null, 2));
+          return result;
         })
       } catch (error) {
         console.error("Error creating complete test:", error)

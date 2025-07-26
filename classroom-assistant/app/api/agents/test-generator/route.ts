@@ -25,11 +25,13 @@ export async function POST(request: NextRequest) {
       gradeRange: validatedInput.gradeRange,
       totalMarks: validatedInput.totalMarks,
       duration: validatedInput.duration,
+      instruction: validatedInput.instruction,
+      curriculum: validatedInput.curriculum,
     })
 
     // Call the test generator flow
     const result = await testGeneratorFlow(validatedInput)
-
+    console.log(result)
     // Validate the result has required fields
     if (!result.questions || result.questions.length === 0) {
       throw new Error("No questions were generated")

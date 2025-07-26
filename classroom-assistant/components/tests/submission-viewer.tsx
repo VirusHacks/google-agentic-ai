@@ -31,7 +31,7 @@ export function SubmissionViewer({ submission, test, onBack }: SubmissionViewerP
   const scorePercentage = (submission.score / submission.maxScore) * 100
 
   const handleEditQuestion = (questionId: string) => {
-    const feedback = submission.questionFeedback[questionId]
+    const feedback = submission.questionFeedback?.[questionId]
     setEditingQuestion(questionId)
     setEditingScore(feedback?.score || 0)
     setEditingFeedback(feedback?.feedback || "")
@@ -46,7 +46,7 @@ export function SubmissionViewer({ submission, test, onBack }: SubmissionViewerP
       if (!question) return
 
       const updatedFeedback = {
-        ...submission.questionFeedback,
+        ...(submission.questionFeedback || {}),
         [editingQuestion]: {
           score: editingScore,
           maxScore: question.marks,
@@ -136,8 +136,9 @@ export function SubmissionViewer({ submission, test, onBack }: SubmissionViewerP
             <div className="p-4 bg-muted rounded-lg">
               <p className="font-semibold">
                 {
-                  Object.keys(submission.questionFeedback).filter((qId) => submission.questionFeedback[qId].isCorrect)
-                    .length
+                  Object.keys(submission.questionFeedback || {}).filter((qId) => 
+                    submission.questionFeedback?.[qId]?.isCorrect
+                  ).length
                 }
                 /{test.questions.length}
               </p>
@@ -163,7 +164,7 @@ export function SubmissionViewer({ submission, test, onBack }: SubmissionViewerP
           {test.questions
             .sort((a, b) => a.order - b.order)
             .map((question, index) => {
-              const feedback = submission.questionFeedback[question.id]
+              const feedback = submission.questionFeedback?.[question.id]
               const studentAnswer = submission.answers[question.id]
               const isEditing = editingQuestion === question.id
 

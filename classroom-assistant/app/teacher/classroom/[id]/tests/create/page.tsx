@@ -279,6 +279,16 @@ export default function CreateTestPage() {
     try {
       const actualTotalMarks = questions.reduce((sum, q) => sum + q.marks, 0)
 
+      // Remove undefined fields from questions
+      const cleanedQuestions = questions.map((q, index) => {
+        const cleaned = { ...q, order: index };
+        Object.keys(cleaned).forEach(
+          (key) => (cleaned as Record<string, any>)[key] === undefined && delete (cleaned as Record<string, any>)[key]
+        );
+        return cleaned;
+      });
+
+      // Remove undefined fields from testData
       const testData = {
         classroomId,
         title: formState.title.trim(),
@@ -291,11 +301,11 @@ export default function CreateTestPage() {
         ...(aiGenerated && formState.generationPrompt
           ? { generationPrompt: formState.generationPrompt }
           : {}),
-        questions: questions.map((q, index) => ({
-          ...q,
-          order: index,
-        })),
-      }
+        questions: cleanedQuestions,
+      };
+      Object.keys(testData).forEach(
+        (key) => (testData as Record<string, any>)[key] === undefined && delete (testData as Record<string, any>)[key]
+      );
 
       // Prepare AI answers if generated
       let aiAnswers: Record<string, any> | undefined
