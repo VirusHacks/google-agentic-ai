@@ -1,3 +1,5 @@
+import { Timestamp } from "firebase/firestore"
+
 export interface User {
   uid: string
   email: string
@@ -101,6 +103,78 @@ export interface Worksheet {
   updatedAt: Date
 }
 
+export interface Test {
+  id: string
+  classroomId: string
+  title: string
+  description?: string
+  duration: number // in minutes
+  totalMarks: number
+  createdBy: string
+  createdAt: Timestamp | Date
+  updatedAt: Timestamp | Date
+  isActive: boolean
+  questions: TestQuestion[]
+  aiGenerated: boolean
+  generationPrompt?: string
+}
+
+export interface TestQuestion {
+  id: string
+  type: "mcq" | "fill" | "match" | "short" | "long"
+  text: string
+  marks: number
+  required: boolean
+  options?: string[] // for MCQ
+  pairs?: { left: string; right: string }[] // for match
+  correctAnswer?: string | string[] | Record<string, string>
+  order: number
+  aiGenerated: boolean
+}
+
+export interface TestSubmission {
+  id: string
+  testId: string
+  classroomId: string
+  studentId: string
+  studentName: string
+  answers: Record<string, any>
+  score: number
+  maxScore: number
+  autoGradedScore: number
+  aiGradedScore: number
+  manualGradedScore: number
+  submittedAt: Timestamp | Date
+  startedAt: Timestamp | Date
+  timeSpent: number // in seconds
+  status: "in_progress" | "submitted" | "graded"
+  gradedBy?: string
+  gradedAt?: Timestamp | Date
+  feedback?: string
+  questionFeedback: Record<
+    string,
+    {
+      score: number
+      feedback: string
+      isCorrect: boolean
+    }
+  >
+}
+
+export interface AIGeneratedAnswers {
+  testId: string
+  classroomId: string
+  answers: Record<
+    string,
+    {
+      correctAnswer: string | string[] | Record<string, string>
+      explanation: string
+      gradingCriteria?: string
+    }
+  >
+  generatedAt: Timestamp | Date
+  generatedBy: string
+}
 export interface StudentAnalytics {
   studentId: string
   classroomId: string
