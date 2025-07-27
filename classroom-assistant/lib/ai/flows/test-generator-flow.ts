@@ -9,10 +9,10 @@ import {
 } from "@/lib/ai/schemas/test-generator-schema"
 
 function extractAndSanitizeTest(jsonText: string): TestGenerationResponse {
-  // Remove markdown code block if present
+  // Remove markdown/code block if present
   let text = jsonText.replace(/```json|```/g, "").trim();
 
-  // Try to find the first JSON object
+  // Find the first JSON object
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace === -1 || lastBrace === -1) throw new Error("No JSON object found in AI output");
@@ -25,20 +25,18 @@ function extractAndSanitizeTest(jsonText: string): TestGenerationResponse {
     throw new Error("Failed to parse AI output as JSON");
   }
 
-  // Handle both flat and sectioned test formats
+  // Accept both flat and sectioned formats, and alternate field names
   let questions: any[] = [];
   if (Array.isArray(parsed.questions)) {
-    // Flat format
     questions = parsed.questions;
   } else if (Array.isArray(parsed.sections)) {
-    // Sectioned format: flatten all questions from all sections
+    // Flatten all questions from all sections
     for (const section of parsed.sections) {
       if (Array.isArray(section.questions)) {
         for (const q of section.questions) {
-          // Map sectioned question fields to expected schema
           questions.push({
             type: q.type,
-            text: q.questionText || q.text || '',
+            text: q.text || q.questionText || "",
             marks: q.marks,
             options: q.options,
             pairs: q.pairs,
@@ -46,21 +44,48 @@ function extractAndSanitizeTest(jsonText: string): TestGenerationResponse {
         }
       }
     }
+  } else if (Array.isArray(parsed.items)) {
+    // Some LLMs might use 'items' instead of 'questions'
+    questions = parsed.items;
   }
 
-  // Defensive: fill in missing fields with defaults
+  // Defensive: filter out invalid questions
+  questions = questions.filter(
+    (q) => q && typeof q.type === "string" && typeof q.text === "string" && typeof q.marks === "number"
+  );
+
+  // Map to expected schema
+  questions = questions.map((q) => ({
+    type: q.type,
+    text: q.text || q.questionText || "",
+    marks: q.marks,
+    options: q.options,
+    pairs: q.pairs,
+  }));
+
+  // Parse duration (accept string or number)
+  let estimatedDuration = 60;
+  if (typeof parsed.estimatedDuration === "number") {
+    estimatedDuration = parsed.estimatedDuration;
+  } else if (typeof parsed.duration === "number") {
+    estimatedDuration = parsed.duration;
+  } else if (typeof parsed.duration === "string") {
+    const match = parsed.duration.match(/\d+/);
+    estimatedDuration = match ? parseInt(match[0], 10) : 60;
+  }
+
+  // Parse totalMarks
+  let totalMarks = 100;
+  if (typeof parsed.totalMarks === "number") {
+    totalMarks = parsed.totalMarks;
+  }
+
   return TestGenerationResponseSchema.parse({
     title: parsed.title || parsed.testTitle || "Untitled Test",
     description: parsed.description || parsed.testDescription || "",
     questions: questions.map((q: any) => GeneratedQuestionSchema.parse(q)),
-    estimatedDuration: typeof parsed.estimatedDuration === "number"
-      ? parsed.estimatedDuration
-      : typeof parsed.duration === "number"
-        ? parsed.duration
-        : typeof parsed.duration === "string"
-          ? parseInt(parsed.duration) || 60
-          : 60,
-    totalMarks: typeof parsed.totalMarks === "number" ? parsed.totalMarks : 100,
+    estimatedDuration,
+    totalMarks,
   });
 }
 
@@ -71,49 +96,55 @@ export const testGeneratorFlow = ai.defineFlow(
     outputSchema: TestGenerationResponseSchema,
   },
   async (input: TestGenerationRequest): Promise<TestGenerationResponse> => {
-    const prompt = `
-You are an expert educator creating a comprehensive test for students.
+    const systemPrompt = `
+You are an expert educator AI. Your ONLY task is to return a valid JSON object matching this TypeScript type, and nothing else:
 
-CONTEXT:
-- Subject: ${input.classroomSubject}
-- Grade Range: ${input.gradeRange}
-- Curriculum Context: ${input.curriculum || "Standard curriculum"}
-- Teacher Instructions: ${input.instruction}
-- Target Total Marks: ${input.totalMarks}
-- Target Duration: ${input.duration} minutes
+{
+  "title": string, // The test title
+  "description": string, // A brief description of the test
+  "questions": Array<{
+    "type": "mcq" | "fill" | "match" | "short" | "long",
+    "text": string,
+    "marks": number,
+    "options"?: string[], // for MCQ
+    "pairs"?: { left: string, right: string }[] // for match
+  }>,
+  "estimatedDuration": number, // in minutes
+  "totalMarks": number
+}
 
-REQUIREMENTS:
-1. Create a well-structured test that matches the teacher's instructions
-2. Distribute marks appropriately across question types
-3. Ensure questions are age-appropriate for ${input.gradeRange}
-4. Cover key concepts from ${input.classroomSubject}
-5. Include a mix of question types as requested
+**STRICT RULES:**
+- Output ONLY a single valid JSON object, with NO markdown, code blocks, or extra text.
+- Do NOT use sections, do NOT use alternate field names, do NOT nest questions under sections.
+- The 'questions' field MUST be a flat array of question objects, each matching the schema above.
+- Use the exact field names: title, description, questions, estimatedDuration, totalMarks, type, text, marks, options, pairs.
+- If a field is not applicable, omit it (do not set it to null or undefined).
+- If you are unsure, return an empty array for 'questions'.
 
-QUESTION TYPES:
-- mcq: Multiple choice (provide 4 options, mark difficulty appropriately)
-- fill: Fill in the blank (single word or phrase answers)
-- match: Matching pairs (provide left and right items to match)
-- short: Short answer (2-3 sentences)
-- long: Long answer/essay (detailed explanations)
-
-MARKING GUIDELINES:
-- MCQ: 1-3 marks each
-- Fill: 1-2 marks each
-- Match: 1 mark per pair, usually 5-10 pairs total
-- Short: 3-8 marks each
-- Long: 8-20 marks each
-
-Generate a complete test with:
-1. An appropriate title
-2. A brief description
-3. Questions that total approximately ${input.totalMarks} marks
-4. Realistic time estimation
-
-Return the response as a valid JSON object.
+**EXAMPLE OUTPUT:**
+{
+  "title": "Photosynthesis Test",
+  "description": "A test on photosynthesis for grade 9.",
+  "questions": [
+    {
+      "type": "mcq",
+      "text": "What is the main pigment in photosynthesis?",
+      "marks": 2,
+      "options": ["Chlorophyll", "Carotene", "Xanthophyll", "Anthocyanin"]
+    },
+    {
+      "type": "short",
+      "text": "Explain the process of photosynthesis.",
+      "marks": 5
+    }
+  ],
+  "estimatedDuration": 60,
+  "totalMarks": 50
+}
 `
 
     const result = await ai.generate({
-      prompt,
+      prompt: systemPrompt,
       config: {
         temperature: 0.7,
         maxOutputTokens: 4000,
