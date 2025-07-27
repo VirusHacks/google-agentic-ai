@@ -75,7 +75,7 @@ In thousands of under-resourced schools across India, one teacher often handles 
 | Backend         | Firebase (Firestore, Auth, Functions)                           |
 | Deployment      | Firebase Hosting + Firebase Studio                              |
 | Agent Framework | Custom agent + LangChain-style architecture                     |
-     |
+     
 
 ---
 
