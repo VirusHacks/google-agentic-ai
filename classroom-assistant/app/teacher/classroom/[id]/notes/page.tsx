@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { NoteUploader } from "@/components/forms/note-uploader"
-import { CloudinaryService } from "@/lib/cloudinary"
+
 import { useToast } from "@/hooks/use-toast"
 import { Plus, FileText, ImageIcon, Video, Download, Edit, Trash2, Search, Tag, Calendar, X } from "lucide-react"
 

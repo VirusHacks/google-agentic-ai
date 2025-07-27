@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { CloudinaryService } from "@/lib/cloudinary"
+
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
@@ -78,11 +78,7 @@ export function AvatarUploader({
     setProgress(0)
 
     try {
-      const response = await CloudinaryService.uploadFile(file, (progress) => {
-        setProgress(progress)
-      })
 
-      onUpload(response.secure_url, response.public_id)
 
       toast({
         title: "Avatar Updated",
@@ -114,16 +110,7 @@ export function AvatarUploader({
       <div className="relative">
         <Avatar className={sizeClasses[size]}>
           <AvatarImage
-            src={
-              displayUrl
-                ? CloudinaryService.getOptimizedUrl(displayUrl, {
-                    width: size === "lg" ? 128 : size === "md" ? 96 : 64,
-                    height: size === "lg" ? 128 : size === "md" ? 96 : 64,
-                    format: "auto",
-                    quality: "auto",
-                  })
-                : undefined
-            }
+           src={undefined}
             alt="Avatar"
           />
           <AvatarFallback className="text-lg font-semibold">{fallbackText}</AvatarFallback>
