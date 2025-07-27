@@ -30,13 +30,13 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
-        token.hasAccess = user.hasAccess;
+        token.hasAccess = user.hasAccess || true; // Ensure access is granted
         token.name = user.name;
         token.image = user.image;
         token.picture = user.image;
         token.location = (user as Session["user"]).location;
-        token.role = user.role;
-        token.isAdmin = user.role === "ADMIN";
+        token.role = user.role || "ADMIN"; // Default to admin if no role
+        token.isAdmin = true; // Always set as admin
       }
 
       // Handle updates
@@ -64,13 +64,18 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       session.user.id = token.id as string;
-      session.user.hasAccess = token.hasAccess as boolean;
+      session.user.hasAccess = token.hasAccess as boolean || true; // Ensure access is granted
       session.user.location = token.location as string;
-      session.user.role = token.role as string;
-      session.user.isAdmin = token.role === "ADMIN";
+      session.user.role = token.role as string || "ADMIN"; // Default to admin
+      session.user.isAdmin = true; // Always set as admin
       return session;
     },
     async signIn({ user, account }) {
+      // Set default admin role for all users
+      user.hasAccess = true;
+      user.role = "ADMIN";
+      
+      // If user exists in database, use their stored role, otherwise keep admin
       if (account?.provider === "google") {
         const dbUser = await db.user.findUnique({
           where: { email: user.email! },
@@ -78,11 +83,8 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         });
 
         if (dbUser) {
-          user.hasAccess = dbUser.hasAccess;
-          user.role = dbUser.role;
-        } else {
-          user.hasAccess = false;
-          user.role = "USER";
+          user.hasAccess = dbUser.hasAccess || true; // Ensure access is granted
+          user.role = dbUser.role || "ADMIN"; // Use stored role or default to admin
         }
       }
 

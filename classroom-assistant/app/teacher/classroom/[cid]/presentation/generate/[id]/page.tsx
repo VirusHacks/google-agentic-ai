@@ -20,19 +20,24 @@ import { ThemeSettings } from "@/components/presentation/theme/ThemeSettings";
 import { Header } from "@/components/presentation/outline/Header";
 import { PromptInput } from "@/components/presentation/outline/PromptInput";
 import { OutlineList } from "@/components/presentation/outline/OutlineList";
+import { PresentationGenerationManager } from "@/components/presentation/dashboard/PresentationGenerationManager";
 
 export default function PresentationGenerateWithIdPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const classroomId = params.cid as string;
   const {
     setCurrentPresentation,
     setPresentationInput,
+    presentationInput,
     startPresentationGeneration,
     isGeneratingPresentation,
     isGeneratingOutline,
+    shouldStartOutlineGeneration,
     setOutline,
     setShouldStartOutlineGeneration,
+    setIsGeneratingOutline,
     setTheme,
     setImageModel,
     setPresentationStyle,
@@ -77,7 +82,25 @@ export default function PresentationGenerateWithIdPage() {
         setShouldStartOutlineGeneration(true);
       }, 100);
     }
-  }, [isGeneratingOutline, setShouldStartOutlineGeneration]);
+    
+    // Fallback: If we have a presentation input but no outline generation has started,
+    // start it automatically after a short delay
+    if (presentationInput && !isGeneratingOutline && !shouldStartOutlineGeneration && !generationStarted.current) {
+      console.log("Starting outline generation as fallback", {
+        presentationInput,
+        isGeneratingOutline,
+        shouldStartOutlineGeneration,
+        generationStarted: generationStarted.current
+      });
+      generationStarted.current = true;
+      
+      setTimeout(() => {
+        console.log("Setting outline generation flags");
+        setShouldStartOutlineGeneration(true);
+        setIsGeneratingOutline(true);
+      }, 500);
+    }
+  }, [isGeneratingOutline, shouldStartOutlineGeneration, presentationInput, setShouldStartOutlineGeneration, setIsGeneratingOutline]);
 
   // Update presentation state when data is fetched
   useEffect(() => {
@@ -150,7 +173,9 @@ export default function PresentationGenerateWithIdPage() {
   ]);
 
   const handleGenerate = () => {
-    router.push(`/presentation/${id}`);
+    // Navigate to the classroom-specific presentation route
+    const presentationRoute = `/teacher/classroom/${classroomId}/presentation/${id}`;
+    router.push(presentationRoute);
     startPresentationGeneration();
   };
 
@@ -171,6 +196,7 @@ export default function PresentationGenerateWithIdPage() {
   }
   return (
     <ThemeBackground>
+      <PresentationGenerationManager />
       <Button
         variant="ghost"
         className="absolute left-4 top-4 flex items-center gap-2 text-muted-foreground hover:text-foreground"

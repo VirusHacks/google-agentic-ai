@@ -1,132 +1,144 @@
-"use server";
-import "server-only";
+"use server"
 
-import { auth } from "@/server/auth";
-import { db } from "@/server/db";
-import { type Prisma, DocumentType } from "@prisma/client";
+import { db } from "@/server/db"
+import { cookies } from "next/headers"
 
-export type PresentationDocument = Prisma.BaseDocumentGetPayload<{
-  include: {
-    presentation: true;
-  };
-}>;
+async function getCurrentUserId(): Promise<string | null> {
+  const cookieStore = cookies()
+  const userCookie = cookieStore.get("firebase-user")
 
-const ITEMS_PER_PAGE = 10;
-
-export async function fetchPresentations(page = 0) {
-  const session = await auth();
-  const userId = session?.user.id;
-
-  if (!userId) {
-    return {
-      items: [],
-      hasMore: false,
-    };
+  if (!userCookie?.value) {
+    return null
   }
 
-  const skip = page * ITEMS_PER_PAGE;
-
-  const items = await db.baseDocument.findMany({
-    where: {
-      userId,
-      type: DocumentType.PRESENTATION,
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-    take: ITEMS_PER_PAGE,
-    skip: skip,
-    include: {
-      presentation: true,
-    },
-  });
-
-  const hasMore = items.length === ITEMS_PER_PAGE;
-
-  return {
-    items,
-    hasMore,
-  };
+  try {
+    const userData = JSON.parse(userCookie.value)
+    return userData.uid
+  } catch {
+    return null
+  }
 }
 
-export async function fetchPublicPresentations(page = 0) {
-  const skip = page * ITEMS_PER_PAGE;
+export async function fetchUserPresentations() {
+  const userId = await getCurrentUserId()
 
-  const [items, total] = await Promise.all([
-    db.baseDocument.findMany({
+  if (!userId) {
+    return []
+  }
+
+  try {
+    const presentations = await db.presentation.findMany({
       where: {
-        type: DocumentType.PRESENTATION,
-        isPublic: true,
+        userId,
       },
       orderBy: {
         updatedAt: "desc",
       },
-      take: ITEMS_PER_PAGE,
-      skip: skip,
-      include: {
-        presentation: true,
-        user: {
-          select: {
-            name: true,
-            image: true,
-          },
-        },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        createdAt: true,
+        updatedAt: true,
+        slides: true,
+        theme: true,
+        outline: true,
+        isFavorite: true,
       },
-    }),
-    db.baseDocument.count({
-      where: {
-        type: DocumentType.PRESENTATION,
-        isPublic: true,
-      },
-    }),
-  ]);
+    })
 
-  const hasMore = skip + ITEMS_PER_PAGE < total;
-
-  return {
-    items,
-    hasMore,
-  };
+    return presentations
+  } catch (error) {
+    console.error("Error fetching presentations:", error)
+    return []
+  }
 }
 
-export async function fetchUserPresentations(userId: string, page = 0) {
-  const session = await auth();
-  const currentUserId = session?.user.id;
+export async function fetchPresentationById(id: string) {
+  const userId = await getCurrentUserId()
 
-  const skip = page * ITEMS_PER_PAGE;
+  if (!userId) {
+    return null
+  }
 
-  const [items, total] = await Promise.all([
-    db.baseDocument.findMany({
+  try {
+    const presentation = await db.presentation.findFirst({
+      where: {
+        id,
+        userId,
+      },
+    })
+
+    return presentation
+  } catch (error) {
+    console.error("Error fetching presentation by ID:", error)
+    return null
+  }
+}
+
+export async function fetchRecentPresentations(limit = 5) {
+  const userId = await getCurrentUserId()
+
+  if (!userId) {
+    return []
+  }
+
+  try {
+    const presentations = await db.presentation.findMany({
       where: {
         userId,
-        type: DocumentType.PRESENTATION,
-        OR: [
-          { isPublic: true },
-          { userId: currentUserId }, // Include private presentations if the user is viewing their own
-        ],
       },
       orderBy: {
         updatedAt: "desc",
       },
-      take: ITEMS_PER_PAGE,
-      skip: skip,
-      include: {
-        presentation: true,
+      take: limit,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        slides: true,
+        theme: true,
       },
-    }),
-    db.baseDocument.count({
+    })
+
+    return presentations
+  } catch (error) {
+    console.error("Error fetching recent presentations:", error)
+    return []
+  }
+}
+
+export async function fetchFavoritePresentations() {
+  const userId = await getCurrentUserId()
+
+  if (!userId) {
+    return []
+  }
+
+  try {
+    const presentations = await db.presentation.findMany({
       where: {
         userId,
-        type: DocumentType.PRESENTATION,
-        OR: [{ isPublic: true }, { userId: currentUserId }],
+        isFavorite: true,
       },
-    }),
-  ]);
+      orderBy: {
+        updatedAt: "desc",
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        updatedAt: true,
+        slides: true,
+        theme: true,
+        isFavorite: true,
+      },
+    })
 
-  const hasMore = skip + ITEMS_PER_PAGE < total;
-
-  return {
-    items,
-    hasMore,
-  };
+    return presentations
+  } catch (error) {
+    console.error("Error fetching favorite presentations:", error)
+    return []
+  }
 }

@@ -443,12 +443,24 @@ export class SlideParser {
 
     if (!sectionNode) {
       console.error("No SECTION element found in the XML");
+      console.error("Available children:", rootNode.children.map(child => child.tag));
+      console.error("Full XML:", sectionString);
+      
+      // Fallback: try to create a slide from the root content
+      const plateElements: PlateNode[] = [];
+      for (const child of rootNode.children) {
+        const element = this.processTopLevelNode(child);
+        if (element) {
+          plateElements.push(element);
+        }
+      }
+      
       return {
         id: nanoid(),
-        content: [],
-        layoutType: undefined,
+        content: plateElements,
+        layoutType: "left" as LayoutType,
         alignment: "center",
-      }; // Return empty content object with a new ID if no section found
+      };
     }
 
     // Generate a section identifier to check if we've seen this section before

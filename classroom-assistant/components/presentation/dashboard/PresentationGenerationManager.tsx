@@ -140,6 +140,12 @@ export function PresentationGenerationManager() {
       const { presentationInput, numSlides, language } =
         usePresentationState.getState();
       if (shouldStartOutlineGeneration) {
+        console.log("PresentationGenerationManager: Starting outline generation", {
+          presentationInput,
+          numSlides,
+          language,
+          shouldStartOutlineGeneration
+        });
         try {
           setIsGeneratingOutline(true);
 
@@ -218,10 +224,13 @@ export function PresentationGenerationManager() {
   useEffect(() => {
     if (presentationCompletion) {
       try {
+        console.log("Received presentation completion:", presentationCompletion.substring(0, 500) + "...");
         streamingParserRef.current.reset();
         streamingParserRef.current.parseChunk(presentationCompletion);
         streamingParserRef.current.finalize();
         const allSlides = streamingParserRef.current.getAllSlides();
+
+        console.log("Parsed slides:", allSlides.length);
 
         // Store the latest slides in the buffer
         slidesBufferRef.current = allSlides;
@@ -232,6 +241,7 @@ export function PresentationGenerationManager() {
         }
       } catch (error) {
         console.error("Error processing presentation XML:", error);
+        console.error("Raw XML content:", presentationCompletion);
         toast.error("Error processing presentation content");
       }
     }

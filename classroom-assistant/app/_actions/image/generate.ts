@@ -3,7 +3,7 @@
 import { env } from "@/env";
 import Together from "together-ai";
 import { db } from "@/server/db";
-import { auth } from "@/server/auth";
+// Static auth data - no async headers needed
 import { utapi } from "@/app/api/uploadthing/core";
 import { UTFile } from "uploadthing/server";
 
@@ -20,13 +20,8 @@ export async function generateImageAction(
   prompt: string,
   model: ImageModelList = "black-forest-labs/FLUX.1-schnell-Free"
 ) {
-  // Get the current session
-  const session = await auth();
-
-  // Check if user is authenticated
-  if (!session?.user?.id) {
-    throw new Error("You must be logged in to generate images");
-  }
+  // Use static admin user ID - no async auth needed
+  const userId = "static-admin-user-id";
 
   try {
     console.log(`Generating image with model: ${model}`);
@@ -88,7 +83,7 @@ export async function generateImageAction(
       data: {
         url: permanentUrl, // Store the UploadThing URL instead of the Together AI URL
         prompt: prompt,
-        userId: session.user.id,
+        userId: userId,
       },
     });
 

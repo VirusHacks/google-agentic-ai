@@ -66,6 +66,8 @@ export function SidebarLayout({ children, role }: SidebarLayoutProps) {
     { name: "Create Classroom", href: "/teacher/create-classroom", icon: Plus },
     { name: "Analytics", href: "/teacher/analytics", icon: BarChart3 },
     { name: "AI Tools", href: "/agents/lecture-summarizer", icon: Bot },
+    { name: "Virtual Classroom", href: "https://framevr.io/sahayak", icon: Bot },
+    { name: "Agentic Meet", href: "/teacher/dashboard", icon: Bot },
   ]
 
   const studentNavItems = [
@@ -73,6 +75,10 @@ export function SidebarLayout({ children, role }: SidebarLayoutProps) {
     { name: "My Classes", href: "/student/classes", icon: BookOpen },
     { name: "Calendar", href: "/student/calendar", icon: Calendar },
     { name: "AI Tutor", href: "/agents/ai-tutor", icon: MessageCircle },
+    { name: "Virtual Classroom", href: "https://framevr.io/sahayak", icon: Bot },
+    { name: "Agentic Meet", href: "/student/dashboard", icon: Bot },
+
+
   ]
 
   const navItems = role === "teacher" ? teacherNavItems : studentNavItems

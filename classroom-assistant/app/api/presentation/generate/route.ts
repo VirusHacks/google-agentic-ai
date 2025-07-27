@@ -1,6 +1,5 @@
 import { LangChainAdapter } from "ai";
 import { NextResponse } from "next/server";
-import { auth } from "@/server/auth";
 import { ChatOpenAI } from "@langchain/openai";
 import { PromptTemplate } from "@langchain/core/prompts";
 import { RunnableSequence } from "@langchain/core/runnables";
@@ -160,10 +159,27 @@ For each outline point:
 4. Include at least one detailed image query in most of the slides
 5. Use appropriate heading hierarchy
 6. Vary the SECTION layout attribute (left/right/vertical) throughout the presentation
-   - Use each layout (left, right, vertical) at least twice
+   - Use each layout (left, right,vertical) at least twice
    - Don't use the same layout more than twice in a row
+7. ALWAYS wrap each slide in a <SECTION> tag with a layout attribute
+8. ALWAYS start with <PRESENTATION> and end with </PRESENTATION>
+9. Each slide must be a complete <SECTION> element
 
-Now create a complete XML presentation with {TOTAL_SLIDES} slides that significantly expands on the outline.
+## REQUIRED XML STRUCTURE
+Your response must follow this exact format:
+\`\`\`xml
+<PRESENTATION>
+<SECTION layout="left">
+  <!-- First slide content -->
+</SECTION>
+<SECTION layout="right">
+  <!-- Second slide content -->
+</SECTION>
+<!-- Continue for all {TOTAL_SLIDES} slides -->
+</PRESENTATION>
+\`\`\`
+
+Now create a complete XML presentation with exactly {TOTAL_SLIDES} slides that significantly expands on the outline.
 `;
 
 const model = new ChatOpenAI({
@@ -174,10 +190,7 @@ const model = new ChatOpenAI({
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Skip authentication for now - using static admin access
 
     const { title, outline, language, tone } =
       (await req.json()) as SlidesRequest;
@@ -198,7 +211,7 @@ export async function POST(req: Request) {
       LANGUAGE: language,
       TONE: tone,
       OUTLINE_FORMATTED: outline.join("\n\n"),
-      TOTAL_SLIDES: outline.length, // +2 for title and conclusion slides
+      TOTAL_SLIDES: outline.length + 2, // +2 for title and conclusion slides
     });
 
     return LangChainAdapter.toDataStreamResponse(stream);

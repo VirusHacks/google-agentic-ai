@@ -3,7 +3,7 @@
 import { Wand2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePresentationState } from "@/states/presentation-state";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { toast } from "sonner";
 import { PresentationInput } from "./PresentationInput";
 import { PresentationControls } from "./PresentationControls";
@@ -14,9 +14,36 @@ import { PresentationsSidebar } from "./PresentationsSidebar";
 import { useEffect } from "react";
 import { PresentationHeader } from "./PresentationHeader";
 import { createEmptyPresentation } from "@/app/_actions/presentation/presentationActions";
+import { SidebarLayout } from "@/components/layout/sidebar-layout";
 
 export function PresentationDashboard() {
   const router = useRouter();
+  const pathname = usePathname();
+  
+  // Detect role based on URL pattern
+  const getRoleFromUrl = () => {
+    if (pathname.includes('/teacher/classroom')) {
+      return 'teacher';
+    } else if (pathname.includes('/student/classroom')) {
+      return 'student';
+    }
+    return 'teacher'; // default fallback
+  };
+  
+  const role = getRoleFromUrl();
+  
+  // Extract classroom ID from URL
+  const getClassroomIdFromUrl = () => {
+    const pathSegments = pathname.split('/');
+    const classroomIndex = pathSegments.findIndex(segment => segment === 'classroom');
+    if (classroomIndex !== -1 && pathSegments[classroomIndex + 1]) {
+      return pathSegments[classroomIndex + 1];
+    }
+    return null;
+  };
+  
+  const classroomId = getClassroomIdFromUrl();
+  
   const {
     presentationInput,
     isGeneratingOutline,
@@ -39,8 +66,9 @@ export function PresentationDashboard() {
       return;
     }
 
-    // Set UI loading state
+    // Set UI loading state and trigger outline generation
     setIsGeneratingOutline(true);
+    setShouldStartOutlineGeneration(true);
 
     try {
       const result = await createEmptyPresentation(
@@ -53,7 +81,11 @@ export function PresentationDashboard() {
           result.presentation.id,
           result.presentation.title
         );
-        router.push(`/presentation/generate/${result.presentation.id}`);
+        // Use the correct route based on role and classroom context
+        const generateRoute = classroomId 
+          ? `/${role}/classroom/${classroomId}/presentation/generate/${result.presentation.id}`
+          : `/presentation/generate/${result.presentation.id}`;
+        router.push(generateRoute);
       } else {
         setIsGeneratingOutline(false);
         toast.error(result.message || "Failed to create presentation");
@@ -68,13 +100,18 @@ export function PresentationDashboard() {
   const handleCreateBlank = async () => {
     try {
       setIsGeneratingOutline(true);
+      setShouldStartOutlineGeneration(true);
       const result = await createEmptyPresentation("Untitled Presentation");
       if (result.success && result.presentation) {
         setCurrentPresentation(
           result.presentation.id,
           result.presentation.title
         );
-        router.push(`/presentation/generate/${result.presentation.id}`);
+        // Use the correct route based on role and classroom context
+        const generateRoute = classroomId 
+          ? `/${role}/classroom/${classroomId}/presentation/generate/${result.presentation.id}`
+          : `/presentation/generate/${result.presentation.id}`;
+        router.push(generateRoute);
       } else {
         setIsGeneratingOutline(false);
         toast.error(result.message || "Failed to create presentation");
@@ -87,6 +124,7 @@ export function PresentationDashboard() {
   };
 
   return (
+    <SidebarLayout role={role}>
     <div className="notebook-section relative w-full">
       <PresentationsSidebar />
       <div className="mx-auto w-full max-w-4xl space-y-12 px-6 py-12">
@@ -100,7 +138,7 @@ export function PresentationDashboard() {
               <Button
                 onClick={handleGenerate}
                 disabled={!presentationInput.trim() || isGeneratingOutline}
-                variant={isGeneratingOutline ? "loading" : "default"}
+                  variant={isGeneratingOutline ? "secondary" : "default"}
                 className="gap-2"
               >
                 <Wand2 className="h-4 w-4" />
@@ -123,5 +161,6 @@ export function PresentationDashboard() {
         <PresentationTemplates />
       </div>
     </div>
+    </SidebarLayout>
   );
 }
