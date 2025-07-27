@@ -90,7 +90,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between h-16">
             <motion.div className="flex items-center space-x-2" whileHover={{ scale: 1.05 }}>
               <BookOpen className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold text-gray-900">Classroom Assistant</span>
+              <span className="text-xl font-bold text-gray-900">Sahayak</span>
             </motion.div>
             <div className="flex items-center space-x-4">
               <Link href="/login">
@@ -561,7 +561,7 @@ export default function HomePage() {
             <motion.div variants={fadeInUp} className="lg:col-span-2">
               <div className="flex items-center space-x-2 mb-6">
                 <BookOpen className="h-8 w-8 text-blue-400" />
-                <span className="text-2xl font-bold">Classroom Assistant</span>
+                <span className="text-2xl font-bold">Sahayak</span>
               </div>
               <p className="text-gray-400 max-w-md mb-6 leading-relaxed">
                 Empowering educators and students with AI-powered tools for better learning outcomes and seamless

@@ -53,6 +53,7 @@ import {
   Settings,
   Upload,
   MoreVertical,
+  Presentation,
 } from "lucide-react"
 import {
   BarChart,
@@ -513,9 +514,9 @@ export default function TeacherClassroomPage() {
                     </a>
                   </Button>
                 )}
-                <Button onClick={() => setShowAIPlanning(true)} className="bg-slate-900 hover:bg-slate-800">
-                  <Brain className="w-4 h-4 mr-2" />
-                  AI Planning
+                <Button onClick={() => router.push(`/teacher/classroom/${classroomId}/presentation`)} className="bg-slate-900 hover:bg-slate-800">
+                  <Presentation className="w-4 h-4 mr-2" />
+                  AI PPT Generator
                 </Button>
               </div>
             </div>

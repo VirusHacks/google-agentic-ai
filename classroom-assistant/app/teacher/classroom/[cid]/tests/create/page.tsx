@@ -2,7 +2,8 @@
 
 import type React from "react"
 import { useState, useCallback, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, usePathname } from "next/navigation"
+import { SidebarLayout } from "@/components/layout/sidebar-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -21,6 +22,16 @@ import { AIButton } from "@/components/tests/ai-button"
 import { AgentUtils } from "@/lib/agent-utils"
 import { FirebaseTestUtils } from "@/lib/firebase-test-utils"
 import type { TestQuestion, Classroom } from "@/lib/types"
+
+// Helper function to get role from URL
+function getRoleFromUrl(pathname: string): "teacher" | "student" {
+  if (pathname.includes("/teacher/")) {
+    return "teacher";
+  } else if (pathname.includes("/student/")) {
+    return "student";
+  }
+  return "teacher"; // Default fallback
+}
 
 interface GenerationState {
   step: "idle" | "generating-questions" | "generating-answers" | "complete" | "error"
@@ -46,8 +57,10 @@ interface FormState {
 export default function CreateTestPage() {
   const params = useParams()
   const router = useRouter()
+  const pathname = usePathname()
   const { user } = useAuth()
   const classroomId = params.cid as string
+  const role = getRoleFromUrl(pathname)
 
   const { data: classroom, loading: classroomLoading } = useFirestoreDocument<Classroom>("classrooms", classroomId)
 
@@ -364,28 +377,33 @@ export default function CreateTestPage() {
 
   if (classroomLoading) {
     return (
-      <div className="container mx-auto p-6 max-w-4xl">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="ml-2">Loading classroom...</span>
+      <SidebarLayout role={role}>
+        <div className="container mx-auto p-6 max-w-4xl">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="ml-2">Loading classroom...</span>
+          </div>
         </div>
-      </div>
+      </SidebarLayout>
     )
   }
 
   if (!classroom) {
     return (
-      <div className="container mx-auto p-6 max-w-4xl">
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Classroom not found or you don't have access to it.</AlertDescription>
-        </Alert>
-      </div>
+      <SidebarLayout role={role}>
+        <div className="container mx-auto p-6 max-w-4xl">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>Classroom not found or you don't have access to it.</AlertDescription>
+          </Alert>
+        </div>
+      </SidebarLayout>
     )
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
+    <SidebarLayout role={role}>
+      <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>
@@ -582,6 +600,7 @@ export default function CreateTestPage() {
           </Button>
         </div>
       </form>
-    </div>
+      </div>
+    </SidebarLayout>
   )
 }

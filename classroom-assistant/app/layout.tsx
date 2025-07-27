@@ -10,7 +10,7 @@ import { SidebarLayout } from "@/components/layout/sidebar-layout"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Classroom Assistant",
+  title: "Sahayak",
   description: "A modern classroom management platform",
     generator: 'v0.dev'
 }
